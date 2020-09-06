@@ -1031,6 +1031,11 @@ if test "$with_petsc" != no; then
 			   ff_slepc_ok=yes
                            ff_SLEPC_LIB="-Wl,-rpath,$d -L$d -lslepc"
 			   AC_FF_ADDWHERELIB(slepc,$ff_SLEPC_LIB,$ff_where_inc_petsc)
+                        if test -f $d/libarpack.$ff_suffix_dylib -o -f $d/libarpack.a ; then
+                            ff_arpack_ok=yes
+                            ff_arpack_libs="-Wl,-rpath,$d -L$d -larpack"
+                            AC_FF_ADDWHERELIB(arpack,$ff_arpack_libs,)
+                        fi
 		        fi
             if test "$ff_slepc_ok" != yes ;   then
                 AC_ARG_WITH(slepc_include,AC_HELP_STRING([--with-slepc-include=],[Include directives for slepc instead of automatic download]))
@@ -1110,6 +1115,13 @@ if test "$with_petsc_complex" != no; then
 				   ff_slepccomplex_ok=yes
                    ff_SLEPCCOMPLEX_LIB="-Wl,-rpath,$d -L$d -lslepc"
 			       AC_FF_ADDWHERELIB(slepccomplex,$ff_SLEPCCOMPLEX_LIB,$ff_where_inc_petsccomplex)
+                   if test -z "$ff_arpack_ok"; then
+                       if test -f $d/libarpack.$ff_suffix_dylib -o -f $d/libarpack.a ; then
+                           ff_arpack_ok=yes
+                           ff_arpack_libs="-Wl,-rpath,$d -L$d -larpack"
+                           AC_FF_ADDWHERELIB(arpack,$ff_arpack_libs,)
+                       fi
+                   fi
 			fi
             if test "$ff_slepccomplex_ok" != yes ;   then
                 AC_ARG_WITH(slepccomplex_include,AC_HELP_STRING([--with-slepccomplex-include=],[Include directives for slepccomplex instead of automatic download]))
@@ -1638,6 +1650,7 @@ fi
 AC_ARG_ENABLE(download-arpack,AC_HELP_STRING([--enable-download_arpack],[force the use  download of arpack]))
 #echo "****** enable_download_arpack=$enable_download_arpack"
 
+if test -z "$ff_arpack_ok"; then
 ff_arpack_ok=no
 ff_save_libs="$LIBS"
 ff_arpack_libs=
@@ -1704,6 +1717,7 @@ then
 	ff_arpack_ok=yes
     fi
     fi
+fi
 fi
 if test  "$ff_arpack_ok" != yes
  then

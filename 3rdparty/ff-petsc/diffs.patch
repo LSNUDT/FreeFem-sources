@@ -1,0 +1,1996 @@
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/package.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/package.py
+index 1e3adac20b..15f2a5e4d3 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/package.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/package.py
+@@ -256,9 +256,30 @@ class Package(config.base.Configure):
+ 
+   def removeWarningFlags(self,flags):
+     outflags = []
+-    for flag in flags.split():
++    for flag in flags:
+       if not flag in ['-Werror','-Wall','-Wwrite-strings','-Wno-strict-aliasing','-Wno-unknown-pragmas','-Wno-unused-variable','-Wno-unused-dummy-argument','-fvisibility=hidden','-std=c89','-pedantic','--coverage','-MFree','-fdefault-integer-8']:
+         outflags.append(flag)
++    return outflags
++
++  def updatePackageCFlags(self,flags):
++    '''To turn off various warnings or errors the compilers may produce with external packages, remove or add appropriate compiler flags'''
++    outflags = self.removeWarningFlags(flags.split())
++    with self.Language('C'):
++      if config.setCompilers.Configure.isDarwinCatalina(self.log) and config.setCompilers.Configure.isClang(self.getCompiler(), self.log):
++        outflags.append('-Wno-implicit-function-declaration')
++    return ' '.join(outflags)
++
++  def updatePackageFFlags(self,flags):
++    outflags = self.removeWarningFlags(flags.split())
++    with self.Language('FC'):
++      if config.setCompilers.Configure.isNAG(self.getLinker(), self.log):
++         outflags.extend(['-mismatch','-dusty','-dcfuns'])
++      if config.setCompilers.Configure.isGfortran100plus(self.getCompiler(), self.log):
++        outflags.append('-fallow-argument-mismatch')
++    return ' '.join(outflags)
++
++  def updatePackageCxxFlags(self,flags):
++    outflags = self.removeWarningFlags(flags.split())
+     return ' '.join(outflags)
+ 
+   def getDefaultLanguage(self):
+@@ -1516,7 +1537,7 @@ class GNUPackage(Package):
+       args.append('CC="'+self.setCompilers.cross_cc+'"')
+     else:
+       args.append('CC="'+self.getCompiler()+'"')
+-    args.append('CFLAGS="'+self.removeWarningFlags(self.getCompilerFlags())+'"')
++    args.append('CFLAGS="'+self.updatePackageCFlags(self.getCompilerFlags())+'"')
+     args.append('AR="'+self.setCompilers.AR+'"')
+     args.append('ARFLAGS="'+self.setCompilers.AR_FLAGS+'"')
+     if not self.installwithbatch and hasattr(self.setCompilers,'cross_LIBS'):
+@@ -1530,7 +1551,7 @@ class GNUPackage(Package):
+         args.append('CXX="'+self.setCompilers.cross_CC+'"')
+       else:
+         args.append('CXX="'+self.getCompiler()+'"')
+-      args.append('CXXFLAGS="'+self.removeWarningFlags(self.getCompilerFlags())+'"')
++      args.append('CXXFLAGS="'+self.updatePackageCxxFlags(self.getCompilerFlags())+'"')
+       self.popLanguage()
+     else:
+       args.append('--disable-cxx')
+@@ -1551,17 +1572,17 @@ class GNUPackage(Package):
+           args.append('F90="'+self.setCompilers.cross_fc+'"')
+         else:
+           args.append('F90="'+fc+'"')
+-        args.append('F90FLAGS="'+self.removeWarningFlags(self.getCompilerFlags())+'"')
++        args.append('F90FLAGS="'+self.updatePackageFFlags(self.getCompilerFlags())+'"')
+       else:
+         args.append('--disable-f90')
+-      args.append('FFLAGS="'+self.removeWarningFlags(self.getCompilerFlags())+'"')
++      args.append('FFLAGS="'+self.updatePackageFFlags(self.getCompilerFlags())+'"')
+       if not self.installwithbatch and hasattr(self.setCompilers,'cross_fc'):
+         args.append('FC="'+self.setCompilers.cross_fc+'"')
+         args.append('F77="'+self.setCompilers.cross_fc+'"')
+       else:
+         args.append('FC="'+fc+'"')
+         args.append('F77="'+fc+'"')
+-      args.append('FCFLAGS="'+self.removeWarningFlags(self.getCompilerFlags())+'"')
++      args.append('FCFLAGS="'+self.updatePackageFFlags(self.getCompilerFlags())+'"')
+       self.popLanguage()
+     else:
+       args.append('--disable-fortran')
+@@ -1678,7 +1699,7 @@ class CMakePackage(Package):
+     args.append('-DCMAKE_AR='+self.setCompilers.AR)
+     ranlib = shlex.split(self.setCompilers.RANLIB)[0]
+     args.append('-DCMAKE_RANLIB='+ranlib)
+-    cflags = self.removeWarningFlags(self.setCompilers.getCompilerFlags())
++    cflags = self.updatePackageCFlags(self.setCompilers.getCompilerFlags())
+     args.append('-DCMAKE_C_FLAGS:STRING="'+cflags+'"')
+     args.append('-DCMAKE_C_FLAGS_DEBUG:STRING="'+cflags+'"')
+     args.append('-DCMAKE_C_FLAGS_RELEASE:STRING="'+cflags+'"')
+@@ -1686,17 +1707,17 @@ class CMakePackage(Package):
+     if hasattr(self.compilers, 'CXX'):
+       self.framework.pushLanguage('Cxx')
+       args.append('-DCMAKE_CXX_COMPILER="'+self.framework.getCompiler()+'"')
+-      args.append('-DCMAKE_CXX_FLAGS:STRING="'+self.removeWarningFlags(self.framework.getCompilerFlags())+'"')
+-      args.append('-DCMAKE_CXX_FLAGS_DEBUG:STRING="'+self.removeWarningFlags(self.framework.getCompilerFlags())+'"')
+-      args.append('-DCMAKE_CXX_FLAGS_RELEASE:STRING="'+self.removeWarningFlags(self.framework.getCompilerFlags())+'"')
++      args.append('-DCMAKE_CXX_FLAGS:STRING="'+self.updatePackageCxxFlags(self.framework.getCompilerFlags())+'"')
++      args.append('-DCMAKE_CXX_FLAGS_DEBUG:STRING="'+self.updatePackageCxxFlags(self.framework.getCompilerFlags())+'"')
++      args.append('-DCMAKE_CXX_FLAGS_RELEASE:STRING="'+self.updatePackageCxxFlags(self.framework.getCompilerFlags())+'"')
+       self.framework.popLanguage()
+ 
+     if hasattr(self.compilers, 'FC'):
+       self.framework.pushLanguage('FC')
+       args.append('-DCMAKE_Fortran_COMPILER="'+self.framework.getCompiler()+'"')
+-      args.append('-DCMAKE_Fortran_FLAGS:STRING="'+self.removeWarningFlags(self.framework.getCompilerFlags())+'"')
+-      args.append('-DCMAKE_Fortran_FLAGS_DEBUG:STRING="'+self.removeWarningFlags(self.framework.getCompilerFlags())+'"')
+-      args.append('-DCMAKE_Fortran_FLAGS_RELEASE:STRING="'+self.removeWarningFlags(self.framework.getCompilerFlags())+'"')
++      args.append('-DCMAKE_Fortran_FLAGS:STRING="'+self.updatePackageFFlags(self.framework.getCompilerFlags())+'"')
++      args.append('-DCMAKE_Fortran_FLAGS_DEBUG:STRING="'+self.updatePackageFFlags(self.framework.getCompilerFlags())+'"')
++      args.append('-DCMAKE_Fortran_FLAGS_RELEASE:STRING="'+self.updatePackageFFlags(self.framework.getCompilerFlags())+'"')
+       self.framework.popLanguage()
+ 
+     if self.setCompilers.LDFLAGS:
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/AMReX.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/AMReX.py
+index 1a2faf7cae..9d500774ff 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/AMReX.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/AMReX.py
+@@ -60,13 +60,6 @@ class Configure(config.package.CMakePackage):
+       args.append('-DHYPRE_ROOT='+os.path.abspath(os.path.expanduser(self.argDB['prefix'])))
+     else:
+       args.append('-DHYPRE_ROOT='+os.path.join(self.petscdir.dir,self.arch))
+-    if hasattr(self.compilers, 'FC'):
+-      self.setCompilers.pushLanguage('FC')
+-      if config.setCompilers.Configure.isGfortran100plus(self.setCompilers.getCompiler(), self.log):
+-        args = self.addArgStartsWith(args,'-DCMAKE_Fortran_FLAGS:STRING','-fallow-argument-mismatch')
+-        args = self.addArgStartsWith(args,'-DCMAKE_Fortran_FLAGS_DEBUG:STRING','-fallow-argument-mismatch')
+-        args = self.addArgStartsWith(args,'-DCMAKE_Fortran_FLAGS_RELEASE:STRING','-fallow-argument-mismatch')
+-      self.setCompilers.popLanguage()
+     return args
+ 
+   def Install(self):
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/Chaco.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/Chaco.py
+index 220704df57..8c88dbe755 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/Chaco.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/Chaco.py
+@@ -27,8 +27,8 @@ class Configure(config.package.Package):
+     g = open(os.path.join(self.packageDir, mkfile), 'w')
+     self.setCompilers.pushLanguage('C')
+     g.write('CC = '+self.setCompilers.getCompiler()+'\n')
+-    g.write('CFLAGS = '+self.removeWarningFlags(self.setCompilers.getCompilerFlags())+'\n')
+-    g.write('OFLAGS = '+self.removeWarningFlags(self.setCompilers.getCompilerFlags())+'\n')
++    g.write('CFLAGS = '+self.updatePackageCFlags(self.setCompilers.getCompilerFlags())+'\n')
++    g.write('OFLAGS = '+self.updatePackageCFlags(self.setCompilers.getCompilerFlags())+'\n')
+     self.setCompilers.popLanguage()
+     g.close()
+ 
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/GLVis.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/GLVis.py
+index a1c32bab24..993e3bff43 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/GLVis.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/GLVis.py
+@@ -55,7 +55,7 @@ class Configure(config.package.GNUPackage):
+ 
+       self.setCompilers.pushLanguage('C')
+       g.write('CC = '+self.setCompilers.getCompiler()+'\n')
+-      g.write('CFLAGS = ' + self.removeWarningFlags(self.setCompilers.getCompilerFlags())+'\n')
++      g.write('CFLAGS = ' + self.updatePackageCFlags(self.setCompilers.getCompilerFlags())+'\n')
+       self.setCompilers.popLanguage()
+ 
+       # build flags for serial MFEM
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/MPICH.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/MPICH.py
+index 0ec4272b14..9c459295f2 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/MPICH.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/MPICH.py
+@@ -63,14 +63,6 @@ class Configure(config.package.GNUPackage):
+     if not self.sharedLibraries.useShared and config.setCompilers.Configure.isDarwin(self.log):
+       args.append('--disable-opencl')
+ 
+-    if hasattr(self.compilers, 'FC'):
+-      self.setCompilers.pushLanguage('FC')
+-      if config.setCompilers.Configure.isNAG(self.setCompilers.getLinker(), self.log):
+-        args = self.addArgStartsWith(args,'FFLAGS','-mismatch')
+-      elif config.setCompilers.Configure.isGfortran100plus(self.setCompilers.getCompiler(), self.log):
+-        args = self.addArgStartsWith(args,'FFLAGS','-fallow-argument-mismatch')
+-      self.setCompilers.popLanguage()
+-
+     # MPICH configure errors out on certain standard configure arguments
+     args = self.rmArgs(args,['--disable-f90','--enable-f90'])
+     args = self.rmArgsStartsWith(args,['F90=','F90FLAGS='])
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/MUMPS.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/MUMPS.py
+index 7350b9dd65..ef4d118c6a 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/MUMPS.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/MUMPS.py
+@@ -104,7 +104,7 @@ class Configure(config.package.Package):
+     g.write('RM = /bin/rm -f\n')
+     self.setCompilers.pushLanguage('C')
+     g.write('CC = '+self.setCompilers.getCompiler()+'\n')
+-    g.write('OPTC    = ' + self.removeWarningFlags(self.setCompilers.getCompilerFlags())+'\n')
++    g.write('OPTC    = ' + self.updatePackageCFlags(self.setCompilers.getCompilerFlags())+'\n')
+     g.write('OUTC = -o \n')
+     self.setCompilers.popLanguage()
+     if not self.fortran.fortranIsF90:
+@@ -112,12 +112,7 @@ class Configure(config.package.Package):
+     self.setCompilers.pushLanguage('FC')
+     g.write('FC = '+self.setCompilers.getCompiler()+'\n')
+     g.write('FL = '+self.setCompilers.getCompiler()+'\n')
+-    extra_fcflags = ''
+-    if config.setCompilers.Configure.isNAG(self.setCompilers.getLinker(), self.log):
+-      extra_fcflags = '-dusty -dcfuns '
+-    elif config.setCompilers.Configure.isGfortran100plus(self.setCompilers.getCompiler(), self.log):
+-      extra_fcflags = '-fallow-argument-mismatch '
+-    g.write('OPTF    = '+extra_fcflags+self.removeWarningFlags(self.setCompilers.getCompilerFlags())+'\n')
++    g.write('OPTF    = '+self.updatePackageFFlags(self.setCompilers.getCompilerFlags())+'\n')
+     if self.blasLapack.checkForRoutine('dgemmt'):
+       g.write('OPTF   += -DGEMMT_AVAILABLE \n')
+     g.write('OUTF = -o \n')
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/PARTY.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/PARTY.py
+index 910cbbdcd2..3736a717ed 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/PARTY.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/PARTY.py
+@@ -16,7 +16,7 @@ class Configure(config.package.Package):
+ 
+     g = open(os.path.join(self.packageDir,'make.inc'),'w')
+     self.setCompilers.pushLanguage('C')
+-    g.write('CC = '+self.setCompilers.getCompiler()+' '+self.removeWarningFlags(self.setCompilers.getCompilerFlags())+'\n')
++    g.write('CC = '+self.setCompilers.getCompiler()+' '+self.updatePackageCFlags(self.setCompilers.getCompilerFlags())+'\n')
+     self.setCompilers.popLanguage()
+     g.close()
+ 
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/PTScotch.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/PTScotch.py
+index 3f857672d3..3039e2260a 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/PTScotch.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/PTScotch.py
+@@ -55,7 +55,7 @@ class Configure(config.package.Package):
+     g.write('CCD        = '+self.setCompilers.getCompiler()+'\n')
+ 
+     # Building cflags/ldflags
+-    self.cflags = self.removeWarningFlags(self.setCompilers.getCompilerFlags())+' '+self.headers.toString(self.mpi.include)
++    self.cflags = self.updatePackageCFlags(self.setCompilers.getCompilerFlags())+' '+self.headers.toString(self.mpi.include)
+     functions = self.framework.require('config.functions', self)
+     if not functions.haveFunction('FORK') and not functions.haveFunction('_PIPE'):
+       raise RuntimeError('Error building PTScotch: no pipe function')
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/PaStiX.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/PaStiX.py
+index a8f2fc3549..6592863079 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/PaStiX.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/PaStiX.py
+@@ -61,9 +61,9 @@ class Configure(config.package.Package):
+     else:
+       cflags = ''
+     if self.mpi.found:
+-      g.write('CCFOPT      = '+self.removeWarningFlags(self.setCompilers.getCompilerFlags())+' '+self.headers.toString(self.mpi.include)+' '+cflags+'\n')
++      g.write('CCFOPT      = '+self.updatePackageCFlags(self.setCompilers.getCompilerFlags())+' '+self.headers.toString(self.mpi.include)+' '+cflags+'\n')
+     else:
+-      g.write('CCFOPT      = '+self.removeWarningFlags(self.setCompilers.getCompilerFlags())+' '+cflags+'\n')
++      g.write('CCFOPT      = '+self.updatePackageCFlags(self.setCompilers.getCompilerFlags())+' '+cflags+'\n')
+     self.setCompilers.popLanguage()
+     g.write('CFPROG      = \n')
+     g.write('CF90PROG    = \n')
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/SuiteSparse.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/SuiteSparse.py
+index afe38c7d55..b17b79e64d 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/SuiteSparse.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/SuiteSparse.py
+@@ -54,7 +54,7 @@ class Configure(config.package.Package):
+ 
+     self.setCompilers.pushLanguage('C')
+     args.append('CC="'+self.setCompilers.getCompiler()+'"')
+-    cflags=self.removeWarningFlags(self.setCompilers.getCompilerFlags())
++    cflags=self.updatePackageCFlags(self.setCompilers.getCompilerFlags())
+     if self.checkSharedLibrariesEnabled():
+       ldflags=self.setCompilers.getDynamicLinkerFlags()
+     else:
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/Triangle.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/Triangle.py
+index efa52b67da..dc13e83783 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/Triangle.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/Triangle.py
+@@ -52,7 +52,7 @@ class Configure(config.package.Package):
+     g.write('SHLIB            = libtriangle\n')
+ 
+     self.setCompilers.pushLanguage('C')
+-    cflags = self.removeWarningFlags(self.setCompilers.getCompilerFlags())
++    cflags = self.updatePackageCFlags(self.setCompilers.getCompilerFlags())
+     cflags += ' '+self.headers.toString('.')
+     cflags += ' -fPIC'
+ 
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/adblaslapack.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/adblaslapack.py
+index 5677d596d9..25308317b6 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/adblaslapack.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/adblaslapack.py
+@@ -28,7 +28,7 @@ class Configure(config.package.Package):
+     g.write('AROPT            = rcs\n')
+     g.write('AR               = '+self.setCompilers.AR+'\n')
+     g.write('CXX              = '+self.framework.getCompiler()+'\n')
+-    g.write('CFLAGS           = -I$(CODI_DIR) -I../include '+self.removeWarningFlags(self.framework.getCompilerFlags())+'\n')
++    g.write('CFLAGS           = -I$(CODI_DIR) -I../include '+self.updatePackageCFlags(self.framework.getCompilerFlags())+'\n')
+     g.close()
+     self.framework.popLanguage()
+ 
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/ascem-io.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/ascem-io.py
+index 9001c860b8..eeaebf91da 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/ascem-io.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/ascem-io.py
+@@ -27,9 +27,9 @@ class Configure(config.package.Package):
+     import os
+     self.setCompilers.pushLanguage('C')
+     if self.hdf5.include:
+-      MAKEARGS = 'MACHINE="" CC="'+self.setCompilers.getCompiler()+' '+self.removeWarningFlags(self.setCompilers.getCompilerFlags())+'" HDF5_INCLUDE_DIR="'+self.hdf5.include[0]+'"'
++      MAKEARGS = 'MACHINE="" CC="'+self.setCompilers.getCompiler()+' '+self.updatePackageCFlags(self.setCompilers.getCompilerFlags())+'" HDF5_INCLUDE_DIR="'+self.hdf5.include[0]+'"'
+     else:
+-      MAKEARGS = 'MACHINE="" CC="'+self.setCompilers.getCompiler()+' '+self.removeWarningFlags(self.setCompilers.getCompilerFlags())+'"'
++      MAKEARGS = 'MACHINE="" CC="'+self.setCompilers.getCompiler()+' '+self.updatePackageCFlags(self.setCompilers.getCompilerFlags())+'"'
+     self.setCompilers.popLanguage()
+     INSTALLARGS = 'ASCEMIO_INSTALL_DIR="'+self.installDir+'"'
+     g = open(os.path.join(self.packageDir,'compiledata'),'w')
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/exodusii.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/exodusii.py
+index 60ebd84c71..7d510eb28a 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/exodusii.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/exodusii.py
+@@ -41,10 +41,6 @@ class Configure(config.package.CMakePackage):
+       args.append('-DCMAKE_Fortran_COMPILER:FILEPATH="'+self.setCompilers.getCompiler()+'"')
+       args.append('-DSEACASProj_ENABLE_SEACASExodus_for=ON')
+       args.append('-DSEACASProj_ENABLE_SEACASExoIIv2for32=ON')
+-      if config.setCompilers.Configure.isGfortran100plus(self.setCompilers.getCompiler(), self.log):
+-        args = self.addArgStartsWith(args,'-DCMAKE_Fortran_FLAGS:STRING','-fallow-argument-mismatch')
+-        args = self.addArgStartsWith(args,'-DCMAKE_Fortran_FLAGS_DEBUG:STRING','-fallow-argument-mismatch')
+-        args = self.addArgStartsWith(args,'-DCMAKE_Fortran_FLAGS_RELEASE:STRING','-fallow-argument-mismatch')
+       self.setCompilers.popLanguage()
+     else:
+       args.append('-DSEACASProj_ENABLE_SEACASExodus_for=OFF')
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/f2cblaslapack.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/f2cblaslapack.py
+index 3ab4caacd0..7bb938f48d 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/f2cblaslapack.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/f2cblaslapack.py
+@@ -40,7 +40,7 @@ class Configure(config.package.Package):
+             line = 'CC = '+cc+'\n'
+           if line.startswith('COPTFLAGS '):
+             self.setCompilers.pushLanguage('C')
+-            line = 'COPTFLAGS  = '+self.removeWarningFlags(self.setCompilers.getCompilerFlags())+'\n'
++            line = 'COPTFLAGS  = '+self.updatePackageCFlags(self.setCompilers.getCompilerFlags())+'\n'
+             self.setCompilers.popLanguage()
+           if line.startswith('CNOOPT'):
+             self.setCompilers.pushLanguage('C')
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/fblaslapack.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/fblaslapack.py
+index 492ec2f5ee..c1ae2e2e9a 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/fblaslapack.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/fblaslapack.py
+@@ -55,22 +55,12 @@ class Configure(config.package.Package):
+         line = 'FC = '+fc+'\n'
+       if line.startswith('FOPTFLAGS '):
+         self.setCompilers.pushLanguage('FC')
+-        line = 'FOPTFLAGS  = '+self.setCompilers.getCompilerFlags().replace('-Mfree','')
+-        if config.setCompilers.Configure.isNAG(self.setCompilers.getLinker(), self.log):
+-          line = line + ' -dusty -dcfuns'
+-        elif config.setCompilers.Configure.isGfortran100plus(self.setCompilers.getCompiler(), self.log):
+-          line = line + ' -fallow-argument-mismatch'
+-        line = line + '\n'
++        line = 'FOPTFLAGS  = '+self.updatePackageFFlags(self.setCompilers.getCompilerFlags())+'\n'
+         noopt = self.checkNoOptFlag()
+         self.setCompilers.popLanguage()
+       if line.startswith('FNOOPT'):
+         self.setCompilers.pushLanguage('FC')
+-        line = 'FNOOPT = '+noopt+' '+self.getSharedFlag(self.setCompilers.getCompilerFlags())+' '+self.getPointerSizeFlag(self.setCompilers.getCompilerFlags())+' '+self.getWindowsNonOptFlags(self.setCompilers.getCompilerFlags())
+-        if config.setCompilers.Configure.isNAG(self.setCompilers.getLinker(), self.log):
+-          line = line + ' -dusty -dcfuns'
+-        elif config.setCompilers.Configure.isGfortran100plus(self.setCompilers.getCompiler(), self.log):
+-          line = line + ' -fallow-argument-mismatch'
+-        line = line + '\n'
++        line = 'FNOOPT = '+noopt+' '+self.getSharedFlag(self.setCompilers.getCompilerFlags())+' '+self.getPointerSizeFlag(self.setCompilers.getCompilerFlags())+' '+self.getWindowsNonOptFlags(self.setCompilers.getCompilerFlags())+' '+self.updatePackageFFlags('')+'\n'
+         self.setCompilers.popLanguage()
+       if line.startswith('AR  '):
+         line = 'AR      = '+self.setCompilers.AR+'\n'
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/googletest.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/googletest.py
+index bcb9dee4cb..c20438015d 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/googletest.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/googletest.py
+@@ -32,12 +32,12 @@ class Configure(config.package.CMakePackage):
+     if hasattr(self.compilers, 'CXX'):
+       self.framework.pushLanguage('Cxx')
+       args.append('-DMPI_CXX_COMPILER="'+self.framework.getCompiler()+'"')
+-      args.append('-DCMAKE_CXX_FLAGS:STRING="'+self.removeWarningFlags(self.framework.getCompilerFlags())+'"')
++      args.append('-DCMAKE_CXX_FLAGS:STRING="'+self.updatePackageCxxFlags(self.framework.getCompilerFlags())+'"')
+     else:
+         raise RuntimeError("googletest requires a C++ compiler\n")
+     self.framework.popLanguage()
+     self.framework.pushLanguage('C')
+     args.append('-DMPI_C_COMPILER="'+self.framework.getCompiler()+'"')
+-    args.append('-DCMAKE_C_FLAGS:STRING="'+self.removeWarningFlags(self.framework.getCompilerFlags())+'"')
++    args.append('-DCMAKE_C_FLAGS:STRING="'+self.updatePackageCFlags(self.framework.getCompilerFlags())+'"')
+     self.framework.popLanguage()
+     return args
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/ml.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/ml.py
+index 3fed49a6f2..d348ac6be1 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/ml.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/ml.py
+@@ -38,7 +38,7 @@ class Configure(config.package.GNUPackage):
+     args.append('--enable-libcheck')
+ 
+     self.framework.pushLanguage('C')
+-    args.append('--with-cflags="'+self.removeWarningFlags(self.framework.getCompilerFlags())+' -DMPICH_SKIP_MPICXX -DOMPI_SKIP_MPICXX '+ self.headers.toStringNoDupes(self.mpi.include)+'"')
++    args.append('--with-cflags="'+self.updatePackageCFlags(self.framework.getCompilerFlags())+' -DMPICH_SKIP_MPICXX -DOMPI_SKIP_MPICXX '+ self.headers.toStringNoDupes(self.mpi.include)+'"')
+     args.append('CPPFLAGS="'+self.headers.toStringNoDupes(self.mpi.include)+'"')
+     self.framework.popLanguage()
+ 
+@@ -49,7 +49,7 @@ class Configure(config.package.GNUPackage):
+     else:
+       args.append('F77=""')
+     self.framework.pushLanguage('Cxx')
+-    args.append('--with-cxxflags="'+self.removeWarningFlags(self.framework.getCompilerFlags())+' -DMPICH_SKIP_MPICXX -DOMPI_SKIP_MPICXX '+ self.headers.toStringNoDupes(self.mpi.include)+'"')
++    args.append('--with-cxxflags="'+self.updatePackageCxxFlags(self.framework.getCompilerFlags())+' -DMPICH_SKIP_MPICXX -DOMPI_SKIP_MPICXX '+ self.headers.toStringNoDupes(self.mpi.include)+'"')
+     self.framework.popLanguage()
+ 
+     # ML does not have --with-mpi-include - so specify includes with cflags,fflags,cxxflags,CPPFLAGS
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/mpe.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/mpe.py
+index ecd95664f7..a0c4d0039e 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/mpe.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/mpe.py
+@@ -18,7 +18,7 @@ class Configure(config.package.GNUPackage):
+   def formGNUConfigureArgs(self):
+     args = config.package.GNUPackage.formGNUConfigureArgs(self)
+     self.framework.pushLanguage('C')
+-    args.append('MPI_CFLAGS="'+self.removeWarningFlags(self.framework.getCompilerFlags())+'"')
++    args.append('MPI_CFLAGS="'+self.updatePackageCFlags(self.framework.getCompilerFlags())+'"')
+     args.append('MPI_CC="'+self.framework.getCompiler()+'"')
+     self.framework.popLanguage()
+ 
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/mstk.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/mstk.py
+index f285f9c323..d54055bbb7 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/mstk.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/mstk.py
+@@ -70,10 +70,10 @@ class Configure(config.package.CMakePackage):
+ 
+     #  Need to pass -DMETIS_5 to C and C++ compiler flags otherwise assumes older Metis
+     args = self.rmArgsStartsWith(args,['-DCMAKE_CXX_FLAGS:STRING','-DCMAKE_C_FLAGS:STRING'])
+-    args.append('-DCMAKE_C_FLAGS:STRING="'+self.removeWarningFlags(self.setCompilers.getCompilerFlags())+' -DMETIS_5"')
++    args.append('-DCMAKE_C_FLAGS:STRING="'+self.updatePackageCFlags(self.setCompilers.getCompilerFlags())+' -DMETIS_5"')
+     if hasattr(self.compilers, 'CXX'):
+       self.framework.pushLanguage('Cxx')
+-      args.append('-DCMAKE_CXX_FLAGS:STRING="'+self.removeWarningFlags(self.framework.getCompilerFlags())+' -DMETIS_5"')
++      args.append('-DCMAKE_CXX_FLAGS:STRING="'+self.updatePackageCxxFlags(self.framework.getCompilerFlags())+' -DMETIS_5"')
+     self.framework.popLanguage()
+ 
+     # mstk does not use the standard -DCMAKE_INSTALL_PREFIX
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/pARMS.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/pARMS.py
+index f17c2ecb82..1246b49ff0 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/pARMS.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/pARMS.py
+@@ -33,7 +33,7 @@ class Configure(config.package.Package):
+     # C compiler
+     self.setCompilers.pushLanguage('C')
+     g.write('CC         = '+self.setCompilers.getCompiler()+'\n')
+-    g.write('CFLAGS     = '+self.removeWarningFlags(self.setCompilers.getCompilerFlags())+' -DUSE_MPI -DREAL=double -DHAS_BLAS ')
++    g.write('CFLAGS     = '+self.updatePackageCFlags(self.setCompilers.getCompilerFlags())+' -DUSE_MPI -DREAL=double -DHAS_BLAS ')
+     if self.scalartypes.scalartype == 'complex':
+       g.write('-DDBL_CMPLX\n')
+     else:
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/pnetcdf.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/pnetcdf.py
+index ac8382a8b5..bce36a615a 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/pnetcdf.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/pnetcdf.py
+@@ -34,11 +34,5 @@ class Configure(config.package.GNUPackage):
+         self.include = oldinclude
+ 
+     args = config.package.GNUPackage.formGNUConfigureArgs(self)
+-    if hasattr(self.compilers, 'FC'):
+-      with self.Language('FC'):
+-        if config.setCompilers.Configure.isGfortran100plus(self.getCompiler(), self.log):
+-          args = self.addArgStartsWith(args, 'FFLAGS', '-fallow-argument-mismatch')
+-          args = self.addArgStartsWith(args, 'FCFLAGS', '-fallow-argument-mismatch')
+-
+     self.addToArgs(args,'LIBS',self.libraries.toStringNoDupes(self.flibs.lib))
+     return args
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/revolve.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/revolve.py
+index 2600cb4708..6721e04ed9 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/revolve.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/revolve.py
+@@ -34,7 +34,7 @@ class Configure(config.package.Package):
+     g.write('PREFIX           = '+self.installDir+'\n')
+ 
+     g.write('CXX              = '+self.framework.getCompiler()+'\n')
+-    g.write('CXXFLAGS         = '+self.removeWarningFlags(self.framework.getCompilerFlags())+'\n')
++    g.write('CXXFLAGS         = '+self.updatePackageCxxFlags(self.framework.getCompilerFlags())+'\n')
+     g.close()
+ 
+     self.framework.popLanguage()
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/scalapack.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/scalapack.py
+index 11c9c94fcd..01ea4eb8ed 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/scalapack.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/scalapack.py
+@@ -45,18 +45,13 @@ class Configure(config.package.Package):
+     g.write('CDEFS        = '+fdef+'\n')
+     self.setCompilers.pushLanguage('FC')
+     g.write('FC           = '+self.setCompilers.getCompiler()+'\n')
+-    extra_fcflags = ''
+-    if config.setCompilers.Configure.isNAG(self.setCompilers.getLinker(), self.log):
+-      extra_fcflags = '-dusty -dcfuns '
+-    elif config.setCompilers.Configure.isGfortran100plus(self.setCompilers.getCompiler(), self.log):
+-      extra_fcflags = '-fallow-argument-mismatch '
+-    g.write('FCFLAGS      = '+extra_fcflags+self.removeWarningFlags(self.setCompilers.getCompilerFlags())+'\n')
++    g.write('FCFLAGS      = '+self.updatePackageFFlags(self.setCompilers.getCompilerFlags())+'\n')
+     g.write('FCLOADER     = '+self.setCompilers.getLinker()+'\n')
+     g.write('FCLOADFLAGS  = '+self.setCompilers.getLinkerFlags()+'\n')
+     self.setCompilers.popLanguage()
+     self.setCompilers.pushLanguage('C')
+     g.write('CC           = '+self.setCompilers.getCompiler()+'\n')
+-    g.write('CCFLAGS      = '+self.removeWarningFlags(self.setCompilers.getCompilerFlags())+' $(MPIINC)\n')
++    g.write('CCFLAGS      = '+self.updatePackageCFlags(self.setCompilers.getCompilerFlags())+' $(MPIINC)\n')
+     noopt = self.checkNoOptFlag()
+     g.write('CFLAGS       = '+noopt+ ' '+self.getSharedFlag(self.setCompilers.getCompilerFlags())+' '+self.getPointerSizeFlag(self.setCompilers.getCompilerFlags())+' '+self.getWindowsNonOptFlags(self.setCompilers.getCompilerFlags())+'\n')
+ 
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/spai.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/spai.py
+index 314db3e19b..c7df92ab6e 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/spai.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/spai.py
+@@ -28,7 +28,7 @@ class Configure(config.package.Package):
+     elif self.blasLapack.mangling == 'caps': FTNOPT = ''
+     else:                                          FTNOPT = '-DSP2'
+ 
+-    args = 'CC = '+self.framework.getCompiler()+'\nCFLAGS = -DSPAI_USE_MPI '+FTNOPT+' '+self.removeWarningFlags(self.framework.getCompilerFlags())+' '+self.headers.toString(self.mpi.include)+'\n'
++    args = 'CC = '+self.framework.getCompiler()+'\nCFLAGS = -DSPAI_USE_MPI '+FTNOPT+' '+self.updatePackageCFlags(self.framework.getCompilerFlags())+' '+self.headers.toString(self.mpi.include)+'\n'
+     args = args+'AR         = '+self.setCompilers.AR+'\n'
+     args = args+'ARFLAGS    = '+self.setCompilers.AR_FLAGS+'\n'
+ 
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/sprng.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/sprng.py
+index 66d3ed2b39..b1b6cbf641 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/sprng.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/sprng.py
+@@ -26,7 +26,7 @@ class Configure(config.package.Package):
+     g.write('RANLIB         = '+self.setCompilers.RANLIB+'\n')
+ 
+     self.setCompilers.pushLanguage('C')
+-    cflags = self.removeWarningFlags(self.setCompilers.getCompilerFlags())
++    cflags = self.updatePackageCFlags(self.setCompilers.getCompilerFlags())
+     cflags += ' ' + self.headers.toString(self.mpi.include)+' '+self.headers.toString('.')
+     cflags += ' ' + '-DSPRNG_MPI' # either using MPI or MPIUNI
+ 
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/tchem.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/tchem.py
+index 08f45a4cad..4266f1e308 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/tchem.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/tchem.py
+@@ -27,12 +27,12 @@ class Configure(config.package.Package):
+     args = []
+     self.framework.pushLanguage('C')
+     args.append('CC="'+self.framework.getCompiler()+'"')
+-    args.append('CFLAGS="'+self.removeWarningFlags(self.framework.getCompilerFlags())+'"')
++    args.append('CFLAGS="'+self.updatePackageCFlags(self.framework.getCompilerFlags())+'"')
+     self.framework.popLanguage()
+     if hasattr(self.compilers, 'CXX'):
+       self.framework.pushLanguage('Cxx')
+       args.append('CXX="'+self.framework.getCompiler()+'"')
+-      args.append('CXXFLAGS="'+self.removeWarningFlags(self.framework.getCompilerFlags())+'"')
++      args.append('CXXFLAGS="'+self.updatePackageCxxFlags(self.framework.getCompilerFlags())+'"')
+       self.framework.popLanguage()
+     args = '\n'.join(args)
+ 
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/tetgen.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/tetgen.py
+index e1855be7da..ef93ce7d23 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/tetgen.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/tetgen.py
+@@ -52,7 +52,7 @@ class Configure(config.package.Package):
+     g.write('TETGENLIB        = $(LIBDIR)/libtet.$(AR_LIB_SUFFIX)\n')
+     g.write('SHLIB            = libtet\n')
+ 
+-    cflags = self.removeWarningFlags(self.setCompilers.getCompilerFlags())
++    cflags = self.updatePackageCFlags(self.setCompilers.getCompilerFlags())
+     cflags += ' '+self.headers.toString('.')
+     cflags += ' -fPIC'
+     cflags += ' -DTETLIBRARY'
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/zlib.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/zlib.py
+index 02e48a00ff..18c761c72e 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/zlib.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/zlib.py
+@@ -22,7 +22,7 @@ class Configure(config.package.Package):
+     args = []
+     self.framework.pushLanguage('C')
+     args.append('CC="'+self.framework.getCompiler()+'"')
+-    args.append('CFLAGS="'+self.removeWarningFlags(self.framework.getCompilerFlags())+'"')
++    args.append('CFLAGS="'+self.updatePackageCFlags(self.framework.getCompilerFlags())+'"')
+     args.append('prefix="'+self.installDir+'"')
+     self.framework.popLanguage()
+     args=' '.join(args)
+-- 
+GitLab
+
+
+From 0da74569a9dbe20f89fcd4c1a9479afb3e81304d Mon Sep 17 00:00:00 2001
+From: Satish Balay <balay@mcs.anl.gov>
+Date: Thu, 17 Sep 2020 01:13:45 -0500
+Subject: [PATCH 2/3] configure: self.framework.pushLanguage() ->
+ self.pushLanguage()
+
+---
+ config/BuildSystem/config/packages/ADIOS.py    | 18 +++++++++---------
+ config/BuildSystem/config/packages/Chombo.py   | 14 +++++++-------
+ .../config/packages/SuperLU_DIST.py            |  2 +-
+ config/BuildSystem/config/packages/Triangle.py |  2 +-
+ .../config/packages/adblaslapack.py            |  8 ++++----
+ config/BuildSystem/config/packages/amanzi.py   | 18 +++++++++---------
+ .../BuildSystem/config/packages/elemental.py   | 18 +++++++++---------
+ config/BuildSystem/config/packages/fftw.py     |  6 +++---
+ .../BuildSystem/config/packages/googletest.py  | 16 ++++++++--------
+ config/BuildSystem/config/packages/lgrind.py   |  8 ++++----
+ config/BuildSystem/config/packages/ml.py       | 18 +++++++++---------
+ config/BuildSystem/config/packages/mpe.py      | 18 +++++++++---------
+ config/BuildSystem/config/packages/mstk.py     |  6 +++---
+ .../BuildSystem/config/packages/pragmatic.py   |  4 ++--
+ config/BuildSystem/config/packages/radau5.py   |  6 +++---
+ config/BuildSystem/config/packages/revolve.py  |  8 ++++----
+ config/BuildSystem/config/packages/spai.py     |  6 +++---
+ config/BuildSystem/config/packages/sprng.py    |  2 +-
+ .../BuildSystem/config/packages/strumpack.py   | 18 +++++++++---------
+ config/BuildSystem/config/packages/sundials.py |  8 ++++----
+ config/BuildSystem/config/packages/tchem.py    | 16 ++++++++--------
+ config/BuildSystem/config/packages/zlib.py     |  8 ++++----
+ 22 files changed, 114 insertions(+), 114 deletions(-)
+
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/ADIOS.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/ADIOS.py
+index cdbca1de57..f6621fa8aa 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/ADIOS.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/ADIOS.py
+@@ -31,17 +31,17 @@ class Configure(config.package.GNUPackage):
+   def formGNUConfigureArgs(self):
+     '''Add ADIOS specific configure arguments'''
+     args = config.package.GNUPackage.formGNUConfigureArgs(self)
+-    self.framework.pushLanguage('C')
+-    args.append('MPICC="'+self.framework.getCompiler()+'"')
+-    self.framework.popLanguage()
++    self.pushLanguage('C')
++    args.append('MPICC="'+self.getCompiler()+'"')
++    self.popLanguage()
+     if hasattr(self.compilers, 'CXX'):
+-      self.framework.pushLanguage('Cxx')
+-      args.append('MPICXX="'+self.framework.getCompiler()+'"')
+-      self.framework.popLanguage()
++      self.pushLanguage('Cxx')
++      args.append('MPICXX="'+self.getCompiler()+'"')
++      self.popLanguage()
+     if hasattr(self.compilers, 'FC'):
+-      self.framework.pushLanguage('FC')
+-      args.append('MPIFC="'+self.framework.getCompiler()+'"')
+-      self.framework.popLanguage()
++      self.pushLanguage('FC')
++      args.append('MPIFC="'+self.getCompiler()+'"')
++      self.popLanguage()
+     else:
+       args.append('--disable-fortran')
+     if self.hdf5.found:
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/Chombo.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/Chombo.py
+index e84ab68f08..7422cbb9ae 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/Chombo.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/Chombo.py
+@@ -45,13 +45,13 @@ class Configure(config.package.Package):
+     g.write('#OPT='+'\n')
+     g.write('#PRECISION='+'\n')
+     g.write('#PROFILE='+'\n')
+-    self.framework.pushLanguage('Cxx')
+-    g.write('CXX='+self.framework.getCompiler()+'\n')
+-    g.write('MPICXX='+self.framework.getCompiler()+'\n')
+-    self.framework.popLanguage()
+-    self.framework.pushLanguage('FC')
+-    g.write('FC='+self.framework.getCompiler()+'\n')
+-    self.framework.popLanguage()
++    self.pushLanguage('Cxx')
++    g.write('CXX='+self.getCompiler()+'\n')
++    g.write('MPICXX='+self.getCompiler()+'\n')
++    self.popLanguage()
++    self.pushLanguage('FC')
++    g.write('FC='+self.getCompiler()+'\n')
++    self.popLanguage()
+     g.write('#OBJMODEL='+'\n')
+     g.write('#XTRACONFIG='+'\n')
+     g.write('#USE_64='+'\n')
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/SuperLU_DIST.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/SuperLU_DIST.py
+index 89a9f0ab14..6d0ce67a98 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/SuperLU_DIST.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/SuperLU_DIST.py
+@@ -66,7 +66,7 @@ class Configure(config.package.CMakePackage):
+     args.append('-Denable_examples=0')
+     #  CMake in SuperLU should set this; but like many other packages it does not
+     args.append('-DCMAKE_INSTALL_NAME_DIR:STRING="'+os.path.join(self.installDir,self.libdir)+'"')
+-    args.append('-DMPI_C_COMPILER:STRING="'+self.framework.getCompiler()+'"')
++    args.append('-DMPI_C_COMPILER:STRING="'+self.getCompiler()+'"')
+     args.append('-DMPI_C_COMPILE_FLAGS:STRING=""')
+     args.append('-DMPI_C_INCLUDE_PATH:STRING=""')
+     args.append('-DMPI_C_HEADER_DIR:STRING=""')
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/Triangle.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/Triangle.py
+index dc13e83783..6bed69f936 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/Triangle.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/Triangle.py
+@@ -64,7 +64,7 @@ class Configure(config.package.Package):
+       import config.setCompilers
+ 
+       g.write('BUILDSHAREDLIB = yes\n')
+-      if config.setCompilers.Configure.isSolaris(self.log) and config.setCompilers.Configure.isGNU(self.framework.getCompiler(), self.log):
++      if config.setCompilers.Configure.isSolaris(self.log) and config.setCompilers.Configure.isGNU(self.getCompiler(), self.log):
+         g.write('shared_arch: shared_'+sys.platform+'gnu\n')
+       else:
+         g.write('shared_arch: shared_'+sys.platform+'\n')
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/adblaslapack.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/adblaslapack.py
+index 25308317b6..6bf4b2cc25 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/adblaslapack.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/adblaslapack.py
+@@ -22,15 +22,15 @@ class Configure(config.package.Package):
+   def Install(self):
+     import os
+ 
+-    self.framework.pushLanguage('Cxx')
++    self.pushLanguage('Cxx')
+     g = open(os.path.join(self.packageDir,'Makefile.inc'),'w')
+     g.write('CODI_DIR         = '+self.CoDiPack.include[0]+'\n')
+     g.write('AROPT            = rcs\n')
+     g.write('AR               = '+self.setCompilers.AR+'\n')
+-    g.write('CXX              = '+self.framework.getCompiler()+'\n')
+-    g.write('CFLAGS           = -I$(CODI_DIR) -I../include '+self.updatePackageCFlags(self.framework.getCompilerFlags())+'\n')
++    g.write('CXX              = '+self.getCompiler()+'\n')
++    g.write('CFLAGS           = -I$(CODI_DIR) -I../include '+self.updatePackageCFlags(self.getCompilerFlags())+'\n')
+     g.close()
+-    self.framework.popLanguage()
++    self.popLanguage()
+ 
+     if self.installNeeded('Makefile.inc'):
+       self.logPrintBox('Configuring, compiling and installing adblaslapack; this may take several seconds')
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/amanzi.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/amanzi.py
+index c5dc57c8b8..090d91bf11 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/amanzi.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/amanzi.py
+@@ -80,18 +80,18 @@ class Configure(config.package.CMakePackage):
+     args.append('-DUnitTest_LIBRARIES="'+self.libraries.toStringNoDupes(self.unittestcpp.lib)+'"')
+     args.append('-DUnitTest_INCLUDE_DIRS='+os.path.join(self.unittestcpp.directory,'include','UnitTest++','UnitTest++'))
+ 
+-    self.framework.pushLanguage('C')
+-    args.append('-DMPI_C_COMPILER="'+self.framework.getCompiler()+'"')
+-    self.framework.popLanguage()
++    self.pushLanguage('C')
++    args.append('-DMPI_C_COMPILER="'+self.getCompiler()+'"')
++    self.popLanguage()
+ 
+-    self.framework.pushLanguage('Cxx')
+-    args.append('-DMPI_CXX_COMPILER="'+self.framework.getCompiler()+'"')
+-    self.framework.popLanguage()
++    self.pushLanguage('Cxx')
++    args.append('-DMPI_CXX_COMPILER="'+self.getCompiler()+'"')
++    self.popLanguage()
+ 
+     if hasattr(self.setCompilers, 'FC'):
+-      self.framework.pushLanguage('FC')
+-      args.append('-DMPI_Fortran_COMPILER="'+self.framework.getCompiler()+'"')
+-      self.framework.popLanguage()
++      self.pushLanguage('FC')
++      args.append('-DMPI_Fortran_COMPILER="'+self.getCompiler()+'"')
++      self.popLanguage()
+     else:
+       args.append('-DTrilinos_ENABLE_Fortran=OFF')
+ 
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/elemental.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/elemental.py
+index cfaeef33bf..042db2fe6a 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/elemental.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/elemental.py
+@@ -65,20 +65,20 @@ class Configure(config.package.CMakePackage):
+     if not self.checkSharedLibrariesEnabled():
+       args.append('-DBUILD_SHARED_LIBS=off')
+ 
+-    self.framework.pushLanguage('C')
+-    args.append('-DMPI_C_COMPILER="'+self.framework.getCompiler()+'"')
++    self.pushLanguage('C')
++    args.append('-DMPI_C_COMPILER="'+self.getCompiler()+'"')
+     if self.argDB['with-64-bit-indices']:
+       args.append('-DEL_USE_64BIT_INTS=ON')
+-    self.framework.popLanguage()
++    self.popLanguage()
+ 
+-    self.framework.pushLanguage('Cxx')
++    self.pushLanguage('Cxx')
+     if config.setCompilers.Configure.isSolaris(self.log):
+        raise RuntimeError('Sorry, Elemental does not compile with Oracle/Solaris/Sun compilers')
+-    args.append('-DMPI_CXX_COMPILER="'+self.framework.getCompiler()+'"')
+-    self.framework.popLanguage()
++    args.append('-DMPI_CXX_COMPILER="'+self.getCompiler()+'"')
++    self.popLanguage()
+ 
+     if hasattr(self.compilers, 'FC'):
+-      self.framework.pushLanguage('FC')
+-      args.append('-DMPI_Fortran_COMPILER="'+self.framework.getCompiler()+'"')
+-      self.framework.popLanguage()
++      self.pushLanguage('FC')
++      args.append('-DMPI_Fortran_COMPILER="'+self.getCompiler()+'"')
++      self.popLanguage()
+     return args
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/fftw.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/fftw.py
+index 126ccbd086..3df1ec0c9d 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/fftw.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/fftw.py
+@@ -22,9 +22,9 @@ class Configure(config.package.GNUPackage):
+ 
+   def formGNUConfigureArgs(self):
+     args = config.package.GNUPackage.formGNUConfigureArgs(self)
+-    self.framework.pushLanguage('C')
+-    args.append('MPICC="'+self.framework.getCompiler()+'"')
+-    self.framework.popLanguage()
++    self.pushLanguage('C')
++    args.append('MPICC="'+self.getCompiler()+'"')
++    self.popLanguage()
+     args.append('--enable-mpi')
+     if self.mpi.lib:
+       args.append('LIBS="'+self.libraries.toStringNoDupes(self.mpi.lib)+'"')
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/googletest.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/googletest.py
+index c20438015d..f5cb30840f 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/googletest.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/googletest.py
+@@ -30,14 +30,14 @@ class Configure(config.package.CMakePackage):
+     args.append('-DBUILD_GMOCK=ON')
+     args.append('-DBUILD_GTEST=OFF')
+     if hasattr(self.compilers, 'CXX'):
+-      self.framework.pushLanguage('Cxx')
+-      args.append('-DMPI_CXX_COMPILER="'+self.framework.getCompiler()+'"')
+-      args.append('-DCMAKE_CXX_FLAGS:STRING="'+self.updatePackageCxxFlags(self.framework.getCompilerFlags())+'"')
++      self.pushLanguage('Cxx')
++      args.append('-DMPI_CXX_COMPILER="'+self.getCompiler()+'"')
++      args.append('-DCMAKE_CXX_FLAGS:STRING="'+self.updatePackageCxxFlags(self.getCompilerFlags())+'"')
+     else:
+         raise RuntimeError("googletest requires a C++ compiler\n")
+-    self.framework.popLanguage()
+-    self.framework.pushLanguage('C')
+-    args.append('-DMPI_C_COMPILER="'+self.framework.getCompiler()+'"')
+-    args.append('-DCMAKE_C_FLAGS:STRING="'+self.updatePackageCFlags(self.framework.getCompilerFlags())+'"')
+-    self.framework.popLanguage()
++    self.popLanguage()
++    self.pushLanguage('C')
++    args.append('-DMPI_C_COMPILER="'+self.getCompiler()+'"')
++    args.append('-DCMAKE_C_FLAGS:STRING="'+self.updatePackageCFlags(self.getCompilerFlags())+'"')
++    self.popLanguage()
+     return args
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/lgrind.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/lgrind.py
+index 339f0e57ca..2f13aa5683 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/lgrind.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/lgrind.py
+@@ -20,11 +20,11 @@ class Configure(config.package.Package):
+   def Install(self):
+     import os
+     try:
+-      self.framework.pushLanguage('C')
+-      output,err,ret = config.package.Package.executeShellCommand('cd '+os.path.join(self.packageDir,'source')+' && make clean && make CC=\''+self.framework.getCompiler()+'\'',timeout=2500,log = self.log)
+-      self.framework.popLanguage()
++      self.pushLanguage('C')
++      output,err,ret = config.package.Package.executeShellCommand('cd '+os.path.join(self.packageDir,'source')+' && make clean && make CC=\''+self.getCompiler()+'\'',timeout=2500,log = self.log)
++      self.popLanguage()
+     except RuntimeError as e:
+-      self.framework.popLanguage()
++      self.popLanguage()
+       if self.argDB['with-batch']:
+         self.logPrintBox('Batch build that could not generate lgrind, you may not be able to build all documentation')
+         return
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/ml.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/ml.py
+index d348ac6be1..f8dad4628d 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/ml.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/ml.py
+@@ -37,20 +37,20 @@ class Configure(config.package.GNUPackage):
+     args.append('--disable-tests')
+     args.append('--enable-libcheck')
+ 
+-    self.framework.pushLanguage('C')
+-    args.append('--with-cflags="'+self.updatePackageCFlags(self.framework.getCompilerFlags())+' -DMPICH_SKIP_MPICXX -DOMPI_SKIP_MPICXX '+ self.headers.toStringNoDupes(self.mpi.include)+'"')
++    self.pushLanguage('C')
++    args.append('--with-cflags="'+self.updatePackageCFlags(self.getCompilerFlags())+' -DMPICH_SKIP_MPICXX -DOMPI_SKIP_MPICXX '+ self.headers.toStringNoDupes(self.mpi.include)+'"')
+     args.append('CPPFLAGS="'+self.headers.toStringNoDupes(self.mpi.include)+'"')
+-    self.framework.popLanguage()
++    self.popLanguage()
+ 
+     if hasattr(self.compilers, 'FC'):
+-      self.framework.pushLanguage('FC')
+-      args.append('--with-fflags="'+self.framework.getCompilerFlags()+' '+ self.headers.toStringNoDupes(self.mpi.include)+'"')
+-      self.framework.popLanguage()
++      self.pushLanguage('FC')
++      args.append('--with-fflags="'+self.getCompilerFlags()+' '+ self.headers.toStringNoDupes(self.mpi.include)+'"')
++      self.popLanguage()
+     else:
+       args.append('F77=""')
+-    self.framework.pushLanguage('Cxx')
+-    args.append('--with-cxxflags="'+self.updatePackageCxxFlags(self.framework.getCompilerFlags())+' -DMPICH_SKIP_MPICXX -DOMPI_SKIP_MPICXX '+ self.headers.toStringNoDupes(self.mpi.include)+'"')
+-    self.framework.popLanguage()
++    self.pushLanguage('Cxx')
++    args.append('--with-cxxflags="'+self.updatePackageCxxFlags(self.getCompilerFlags())+' -DMPICH_SKIP_MPICXX -DOMPI_SKIP_MPICXX '+ self.headers.toStringNoDupes(self.mpi.include)+'"')
++    self.popLanguage()
+ 
+     # ML does not have --with-mpi-include - so specify includes with cflags,fflags,cxxflags,CPPFLAGS
+     args.append('--enable-mpi')
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/mpe.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/mpe.py
+index a0c4d0039e..6f35b296e1 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/mpe.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/mpe.py
+@@ -17,17 +17,17 @@ class Configure(config.package.GNUPackage):
+ 
+   def formGNUConfigureArgs(self):
+     args = config.package.GNUPackage.formGNUConfigureArgs(self)
+-    self.framework.pushLanguage('C')
+-    args.append('MPI_CFLAGS="'+self.updatePackageCFlags(self.framework.getCompilerFlags())+'"')
+-    args.append('MPI_CC="'+self.framework.getCompiler()+'"')
+-    self.framework.popLanguage()
++    self.pushLanguage('C')
++    args.append('MPI_CFLAGS="'+self.updatePackageCFlags(self.getCompilerFlags())+'"')
++    args.append('MPI_CC="'+self.getCompiler()+'"')
++    self.popLanguage()
+ 
+     if hasattr(self.compilers, 'FC'):
+-      self.framework.pushLanguage('FC')
+-      args.append('MPI_FFLAGS="'+self.framework.getCompilerFlags()+'"')
+-      args.append('F77="'+self.framework.getCompiler()+'"')
+-      args.append('MPI_F77="'+self.framework.getCompiler()+'"')
+-      self.framework.popLanguage()
++      self.pushLanguage('FC')
++      args.append('MPI_FFLAGS="'+self.getCompilerFlags()+'"')
++      args.append('F77="'+self.getCompiler()+'"')
++      args.append('MPI_F77="'+self.getCompiler()+'"')
++      self.popLanguage()
+     else:
+       args.append('--disable-f77')
+ 
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/mstk.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/mstk.py
+index d54055bbb7..27691bdfa6 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/mstk.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/mstk.py
+@@ -72,9 +72,9 @@ class Configure(config.package.CMakePackage):
+     args = self.rmArgsStartsWith(args,['-DCMAKE_CXX_FLAGS:STRING','-DCMAKE_C_FLAGS:STRING'])
+     args.append('-DCMAKE_C_FLAGS:STRING="'+self.updatePackageCFlags(self.setCompilers.getCompilerFlags())+' -DMETIS_5"')
+     if hasattr(self.compilers, 'CXX'):
+-      self.framework.pushLanguage('Cxx')
+-      args.append('-DCMAKE_CXX_FLAGS:STRING="'+self.updatePackageCxxFlags(self.framework.getCompilerFlags())+' -DMETIS_5"')
+-    self.framework.popLanguage()
++      self.pushLanguage('Cxx')
++      args.append('-DCMAKE_CXX_FLAGS:STRING="'+self.updatePackageCxxFlags(self.getCompilerFlags())+' -DMETIS_5"')
++    self.popLanguage()
+ 
+     # mstk does not use the standard -DCMAKE_INSTALL_PREFIX
+     args.append('-DINSTALL_DIR='+self.installDir)
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/pragmatic.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/pragmatic.py
+index 5a0153c316..95bb56d596 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/pragmatic.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/pragmatic.py
+@@ -36,12 +36,12 @@ class Configure(config.package.CMakePackage):
+     args.append('-DEIGEN_INCLUDE_DIR='+self.eigen.include[0])
+ 
+     # prevent Pragmatic from linking to MPI it finds by itself
+-    args.append('-DMPI_C_COMPILER:STRING="'+self.framework.getCompiler()+'"')
++    args.append('-DMPI_C_COMPILER:STRING="'+self.getCompiler()+'"')
+     args.append('-DMPI_C_INCLUDE_PATH:STRING=""')
+     args.append('-DMPI_C_COMPILE_FLAGS:STRING=""')
+     args.append('-DMPI_C_LINK_FLAGS:STRING=""')
+     args.append('-DMPI_C_LIBRARIES:STRING=""')
+-    args.append('-DMPI_CXX_COMPILER:STRING="'+self.framework.getCompiler('Cxx')+'"')
++    args.append('-DMPI_CXX_COMPILER:STRING="'+self.getCompiler('Cxx')+'"')
+     args.append('-DMPI_CXX_INCLUDE_PATH:STRING=""')
+     args.append('-DMPI_CXX_COMPILE_FLAGS:STRING=""')
+     args.append('-DMPI_CXX_LINK_FLAGS:STRING=""')
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/radau5.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/radau5.py
+index e4d5938594..e790b41f99 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/radau5.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/radau5.py
+@@ -21,9 +21,9 @@ class Configure(config.package.Package):
+   def Install(self):
+     import os
+     try:
+-      self.framework.pushLanguage('FC')
+-      output,err,ret = config.package.Package.executeShellCommand('cd '+self.packageDir+' && make AR=ar FC=\''+self.framework.getCompiler()+' '+self.framework.getCompilerFlags()+'\'',timeout=2500,log = self.log)
+-      self.framework.popLanguage()
++      self.pushLanguage('FC')
++      output,err,ret = config.package.Package.executeShellCommand('cd '+self.packageDir+' && make AR=ar FC=\''+self.getCompiler()+' '+self.getCompilerFlags()+'\'',timeout=2500,log = self.log)
++      self.popLanguage()
+     except RuntimeError as e:
+       raise RuntimeError('Error running make on radau5: '+str(e))
+     output,err,ret  = config.package.Package.executeShellCommand('cp -f '+os.path.join(self.packageDir,'libradau5.a')+' '+os.path.join(self.confDir,'lib'), timeout=60, log = self.log)
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/revolve.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/revolve.py
+index 6721e04ed9..c529122133 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/revolve.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/revolve.py
+@@ -20,7 +20,7 @@ class Configure(config.package.Package):
+   def Install(self):
+     import os
+ 
+-    self.framework.pushLanguage('Cxx')
++    self.pushLanguage('Cxx')
+     g = open(os.path.join(self.packageDir,'make.inc'),'w')
+     g.write('CP               = '+self.programs.cp+'\n')
+     g.write('RM               = '+self.programs.RM+'\n')
+@@ -33,11 +33,11 @@ class Configure(config.package.Package):
+ 
+     g.write('PREFIX           = '+self.installDir+'\n')
+ 
+-    g.write('CXX              = '+self.framework.getCompiler()+'\n')
+-    g.write('CXXFLAGS         = '+self.updatePackageCxxFlags(self.framework.getCompilerFlags())+'\n')
++    g.write('CXX              = '+self.getCompiler()+'\n')
++    g.write('CXXFLAGS         = '+self.updatePackageCxxFlags(self.getCompilerFlags())+'\n')
+     g.close()
+ 
+-    self.framework.popLanguage()
++    self.popLanguage()
+ 
+     if self.installNeeded('make.inc'):
+       self.logPrintBox('Configuring, compiling and installing revolve; this may take several seconds')
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/spai.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/spai.py
+index c7df92ab6e..bf3b1003a1 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/spai.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/spai.py
+@@ -23,18 +23,18 @@ class Configure(config.package.Package):
+   def Install(self):
+     import os
+ 
+-    self.framework.pushLanguage('C')
++    self.pushLanguage('C')
+     if self.blasLapack.mangling == 'underscore':   FTNOPT = ''
+     elif self.blasLapack.mangling == 'caps': FTNOPT = ''
+     else:                                          FTNOPT = '-DSP2'
+ 
+-    args = 'CC = '+self.framework.getCompiler()+'\nCFLAGS = -DSPAI_USE_MPI '+FTNOPT+' '+self.updatePackageCFlags(self.framework.getCompilerFlags())+' '+self.headers.toString(self.mpi.include)+'\n'
++    args = 'CC = '+self.getCompiler()+'\nCFLAGS = -DSPAI_USE_MPI '+FTNOPT+' '+self.updatePackageCFlags(self.getCompilerFlags())+' '+self.headers.toString(self.mpi.include)+'\n'
+     args = args+'AR         = '+self.setCompilers.AR+'\n'
+     args = args+'ARFLAGS    = '+self.setCompilers.AR_FLAGS+'\n'
+ 
+     fd = open(os.path.join(self.packageDir,'lib','Makefile.in'),'w')
+     fd.write(args)
+-    self.framework.popLanguage()
++    self.popLanguage()
+     fd.close()
+ 
+     if self.installNeeded('Makefile.in'):
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/sprng.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/sprng.py
+index b1b6cbf641..96c02f1103 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/sprng.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/sprng.py
+@@ -34,7 +34,7 @@ class Configure(config.package.Package):
+     g.write('CFLAGS         = '+cflags+'\n')
+     g.write('CLD            = $(CC)\n')
+     g.write('MPICC          = $(CC)\n')
+-    g.write('CPP            ='+self.framework.getPreprocessor()+'\n')
++    g.write('CPP            ='+self.getPreprocessor()+'\n')
+     self.setCompilers.popLanguage()
+ 
+     # extra unused options
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/strumpack.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/strumpack.py
+index 73bbb86a16..cd270cac50 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/strumpack.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/strumpack.py
+@@ -67,17 +67,17 @@ class Configure(config.package.CMakePackage):
+     else:
+       args.append('-DSTRUMPACK_USE_OPENMP=OFF')
+ 
+-    self.framework.pushLanguage('C')
+-    args.append('-DMPI_C_COMPILER="' + self.framework.getCompiler() + '"')
+-    self.framework.popLanguage()
++    self.pushLanguage('C')
++    args.append('-DMPI_C_COMPILER="' + self.getCompiler() + '"')
++    self.popLanguage()
+ 
+-    self.framework.pushLanguage('Cxx')
+-    args.append('-DMPI_CXX_COMPILER="' + self.framework.getCompiler() + '"')
+-    self.framework.popLanguage()
++    self.pushLanguage('Cxx')
++    args.append('-DMPI_CXX_COMPILER="' + self.getCompiler() + '"')
++    self.popLanguage()
+ 
+-    self.framework.pushLanguage('FC')
+-    args.append('-DMPI_Fortran_COMPILER="' + self.framework.getCompiler() + '"')
+-    self.framework.popLanguage()
++    self.pushLanguage('FC')
++    args.append('-DMPI_Fortran_COMPILER="' + self.getCompiler() + '"')
++    self.popLanguage()
+ 
+     args.append('-DCMAKE_INSTALL_NAME_DIR:STRING="'+os.path.join(self.installDir,self.libdir)+'"')
+ 
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/sundials.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/sundials.py
+index e89723e79b..e9f038ca1c 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/sundials.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/sundials.py
+@@ -27,9 +27,9 @@ class Configure(config.package.GNUPackage):
+     import os
+     args = config.package.GNUPackage.formGNUConfigureArgs(self)
+ 
+-    self.framework.pushLanguage('C')
++    self.pushLanguage('C')
+     # use --with-mpi-root if we know it works
+-    if self.mpi.directory and (os.path.realpath(self.framework.getCompiler())).find(os.path.realpath(self.mpi.directory)) >=0:
++    if self.mpi.directory and (os.path.realpath(self.getCompiler())).find(os.path.realpath(self.mpi.directory)) >=0:
+       self.log.write('Sundials configure: using --with-mpi-root='+self.mpi.directory+'\n')
+       args.append('--with-mpi-root="'+self.mpi.directory+'"')
+     # else provide everything!
+@@ -37,7 +37,7 @@ class Configure(config.package.GNUPackage):
+       #print a message if the previous check failed
+       if self.mpi.directory:
+         self.log.write('Sundials configure: --with-mpi-dir specified - but could not use it\n')
+-        self.log.write(str(os.path.realpath(self.framework.getCompiler()))+' '+str(os.path.realpath(self.mpi.directory))+'\n')
++        self.log.write(str(os.path.realpath(self.getCompiler()))+' '+str(os.path.realpath(self.mpi.directory))+'\n')
+ 
+       if self.mpi.include:
+         args.append('--with-mpi-incdir="'+self.mpi.include[0]+'"')
+@@ -59,7 +59,7 @@ class Configure(config.package.GNUPackage):
+         args.append('--with-mpi-libdir="/usr/lib"')  # dummy case
+         args.append('--with-mpi-libs="-lc"')
+ 
+-    self.framework.popLanguage()
++    self.popLanguage()
+ 
+     args = self.rmArgsStartsWith(args,['F77=','F90=','FC=','FFLAGS=','FCFLAGS=','F90FLAGS='])
+     args.append('--without-mpif77')
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/tchem.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/tchem.py
+index 4266f1e308..0cd529e158 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/tchem.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/tchem.py
+@@ -25,15 +25,15 @@ class Configure(config.package.Package):
+     shareDir       = os.path.join(self.installDir, 'share')
+ 
+     args = []
+-    self.framework.pushLanguage('C')
+-    args.append('CC="'+self.framework.getCompiler()+'"')
+-    args.append('CFLAGS="'+self.updatePackageCFlags(self.framework.getCompilerFlags())+'"')
+-    self.framework.popLanguage()
++    self.pushLanguage('C')
++    args.append('CC="'+self.getCompiler()+'"')
++    args.append('CFLAGS="'+self.updatePackageCFlags(self.getCompilerFlags())+'"')
++    self.popLanguage()
+     if hasattr(self.compilers, 'CXX'):
+-      self.framework.pushLanguage('Cxx')
+-      args.append('CXX="'+self.framework.getCompiler()+'"')
+-      args.append('CXXFLAGS="'+self.updatePackageCxxFlags(self.framework.getCompilerFlags())+'"')
+-      self.framework.popLanguage()
++      self.pushLanguage('Cxx')
++      args.append('CXX="'+self.getCompiler()+'"')
++      args.append('CXXFLAGS="'+self.updatePackageCxxFlags(self.getCompilerFlags())+'"')
++      self.popLanguage()
+     args = '\n'.join(args)
+ 
+     conffile = os.path.join(self.packageDir, self.package)
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/zlib.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/zlib.py
+index 18c761c72e..72945ca54b 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/zlib.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/zlib.py
+@@ -20,11 +20,11 @@ class Configure(config.package.Package):
+     import os
+ 
+     args = []
+-    self.framework.pushLanguage('C')
+-    args.append('CC="'+self.framework.getCompiler()+'"')
+-    args.append('CFLAGS="'+self.updatePackageCFlags(self.framework.getCompilerFlags())+'"')
++    self.pushLanguage('C')
++    args.append('CC="'+self.getCompiler()+'"')
++    args.append('CFLAGS="'+self.updatePackageCFlags(self.getCompilerFlags())+'"')
+     args.append('prefix="'+self.installDir+'"')
+-    self.framework.popLanguage()
++    self.popLanguage()
+     args=' '.join(args)
+ 
+     cargs=[]
+-- 
+GitLab
+
+
+From 2566180e942ab0ae90aa0511b30095f931a0454a Mon Sep 17 00:00:00 2001
+From: Satish Balay <balay@mcs.anl.gov>
+Date: Thu, 17 Sep 2020 01:19:35 -0500
+Subject: [PATCH 3/3] configure: self.setCompilers.pushLanguage() ->
+ self.pushLanguage()
+
+---
+ config/BuildSystem/config/packages/Chaco.py   | 10 +++----
+ config/BuildSystem/config/packages/GLVis.py   | 14 +++++-----
+ config/BuildSystem/config/packages/MFEM.py    |  8 +++---
+ config/BuildSystem/config/packages/MUMPS.py   | 20 +++++++-------
+ config/BuildSystem/config/packages/PARTY.py   |  6 ++---
+ .../BuildSystem/config/packages/PTScotch.py   | 12 ++++-----
+ config/BuildSystem/config/packages/PaStiX.py  | 14 +++++-----
+ .../config/packages/SuiteSparse.py            | 16 ++++++------
+ .../BuildSystem/config/packages/Triangle.py   | 10 +++----
+ .../BuildSystem/config/packages/ascem-io.py   |  8 +++---
+ config/BuildSystem/config/packages/blis.py    |  2 +-
+ config/BuildSystem/config/packages/ctetgen.py |  6 ++---
+ config/BuildSystem/config/packages/egads.py   |  6 ++---
+ .../BuildSystem/config/packages/exodusii.py   | 12 ++++-----
+ .../config/packages/f2cblaslapack.py          | 12 ++++-----
+ .../config/packages/fblaslapack.py            | 24 ++++++++---------
+ config/BuildSystem/config/packages/hara.py    |  8 +++---
+ config/BuildSystem/config/packages/hpddm.py   |  8 +++---
+ config/BuildSystem/config/packages/kblas.py   |  8 +++---
+ config/BuildSystem/config/packages/libceed.py |  2 +-
+ config/BuildSystem/config/packages/magma.py   | 26 +++++++++----------
+ config/BuildSystem/config/packages/mstk.py    |  2 +-
+ config/BuildSystem/config/packages/pARMS.py   |  8 +++---
+ .../BuildSystem/config/packages/scalapack.py  | 26 +++++++++----------
+ config/BuildSystem/config/packages/sprng.py   |  8 +++---
+ config/BuildSystem/config/packages/tetgen.py  | 12 ++++-----
+ config/BuildSystem/config/packages/zstd.py    |  4 +--
+ 27 files changed, 146 insertions(+), 146 deletions(-)
+
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/Chaco.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/Chaco.py
+index 8c88dbe755..b1b75820d3 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/Chaco.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/Chaco.py
+@@ -25,11 +25,11 @@ class Configure(config.package.Package):
+ 
+     mkfile = 'make.inc'
+     g = open(os.path.join(self.packageDir, mkfile), 'w')
+-    self.setCompilers.pushLanguage('C')
+-    g.write('CC = '+self.setCompilers.getCompiler()+'\n')
+-    g.write('CFLAGS = '+self.updatePackageCFlags(self.setCompilers.getCompilerFlags())+'\n')
+-    g.write('OFLAGS = '+self.updatePackageCFlags(self.setCompilers.getCompilerFlags())+'\n')
+-    self.setCompilers.popLanguage()
++    self.pushLanguage('C')
++    g.write('CC = '+self.getCompiler()+'\n')
++    g.write('CFLAGS = '+self.updatePackageCFlags(self.getCompilerFlags())+'\n')
++    g.write('OFLAGS = '+self.updatePackageCFlags(self.getCompilerFlags())+'\n')
++    self.popLanguage()
+     g.close()
+ 
+     if self.installNeeded(mkfile):
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/GLVis.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/GLVis.py
+index 993e3bff43..37d336b4e6 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/GLVis.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/GLVis.py
+@@ -53,15 +53,15 @@ class Configure(config.package.GNUPackage):
+       g.write('GLVIS_USE_LIBTIFF = NO\n')
+       g.write('GLVIS_USE_LIBPNG = NO\n')
+ 
+-      self.setCompilers.pushLanguage('C')
+-      g.write('CC = '+self.setCompilers.getCompiler()+'\n')
+-      g.write('CFLAGS = ' + self.updatePackageCFlags(self.setCompilers.getCompilerFlags())+'\n')
+-      self.setCompilers.popLanguage()
++      self.pushLanguage('C')
++      g.write('CC = '+self.getCompiler()+'\n')
++      g.write('CFLAGS = ' + self.updatePackageCFlags(self.getCompilerFlags())+'\n')
++      self.popLanguage()
+ 
+       # build flags for serial MFEM
+-      self.setCompilers.pushLanguage('Cxx')
+-      mfem_flags='CXX=\"'+self.setCompilers.getCompiler()+'\" CXXFLAGS=\"-O3 '+self.setCompilers.getCompilerFlags()+'\"'
+-      self.setCompilers.popLanguage()
++      self.pushLanguage('Cxx')
++      mfem_flags='CXX=\"'+self.getCompiler()+'\" CXXFLAGS=\"-O3 '+self.getCompilerFlags()+'\"'
++      self.popLanguage()
+ 
+       g.write('PETSC_MFEM_FLAGS = '+mfem_flags+'\n')
+       g.close()
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/MFEM.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/MFEM.py
+index 2550661886..4a02ead889 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/MFEM.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/MFEM.py
+@@ -64,15 +64,15 @@ class Configure(config.package.Package):
+ 
+     PETSC_OPT = self.headers.toStringNoDupes([os.path.join(PETSC_DIR,'include'),os.path.join(PETSC_DIR,PETSC_ARCH,'include')])
+ 
+-    self.setCompilers.pushLanguage('Cxx')
+-    cxx = self.setCompilers.getCompiler()
+-    cxxflags = self.setCompilers.getCompilerFlags()
++    self.pushLanguage('Cxx')
++    cxx = self.getCompiler()
++    cxxflags = self.getCompilerFlags()
+     cxxflags = cxxflags.replace('-fvisibility=hidden','') # MFEM is currently broken with -fvisibility=hidden
+     # MFEM uses the macro MFEM_BUILD_DIR that builds a path by combining the directory plus other stuff but if the
+     # directory name contains  "-linux'" this is converted by CPP to the value 1 since that is defined in Linux header files
+     # unless the -std=C++11 or -std=C++14 flag is used; we want to support MFEM without this flag
+     cxxflags += ' -Dlinux=linux'
+-    self.setCompilers.popLanguage()
++    self.popLanguage()
+     if 'download-mfem-ghv-cxx' in self.argDB and self.argDB['download-mfem-ghv-cxx']:
+       ghv = self.argDB['download-mfem-ghv-cxx']
+     else:
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/MUMPS.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/MUMPS.py
+index ef4d118c6a..a5bba8f45f 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/MUMPS.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/MUMPS.py
+@@ -102,21 +102,21 @@ class Configure(config.package.Package):
+     g.write('IORDERINGSF = $(ISCOTCH)\n')
+ 
+     g.write('RM = /bin/rm -f\n')
+-    self.setCompilers.pushLanguage('C')
+-    g.write('CC = '+self.setCompilers.getCompiler()+'\n')
+-    g.write('OPTC    = ' + self.updatePackageCFlags(self.setCompilers.getCompilerFlags())+'\n')
++    self.pushLanguage('C')
++    g.write('CC = '+self.getCompiler()+'\n')
++    g.write('OPTC    = ' + self.updatePackageCFlags(self.getCompilerFlags())+'\n')
+     g.write('OUTC = -o \n')
+-    self.setCompilers.popLanguage()
++    self.popLanguage()
+     if not self.fortran.fortranIsF90:
+       raise RuntimeError('Installing MUMPS requires a F90 compiler')
+-    self.setCompilers.pushLanguage('FC')
+-    g.write('FC = '+self.setCompilers.getCompiler()+'\n')
+-    g.write('FL = '+self.setCompilers.getCompiler()+'\n')
+-    g.write('OPTF    = '+self.updatePackageFFlags(self.setCompilers.getCompilerFlags())+'\n')
++    self.pushLanguage('FC')
++    g.write('FC = '+self.getCompiler()+'\n')
++    g.write('FL = '+self.getCompiler()+'\n')
++    g.write('OPTF    = '+self.updatePackageFFlags(self.getCompilerFlags())+'\n')
+     if self.blasLapack.checkForRoutine('dgemmt'):
+       g.write('OPTF   += -DGEMMT_AVAILABLE \n')
+     g.write('OUTF = -o \n')
+-    self.setCompilers.popLanguage()
++    self.popLanguage()
+ 
+     # set fortran name mangling
+     # this mangling information is for both BLAS and the Fortran compiler so cannot use the BlasLapack mangling flag
+@@ -139,7 +139,7 @@ class Configure(config.package.Package):
+     g.write('INCSEQ  = -I$(topdir)/libseq\n')
+     g.write('LIBSEQ  =  $(LAPACK) -L$(topdir)/libseq -lmpiseq\n')
+     g.write('LIBBLAS = '+self.libraries.toString(self.blasLapack.dlib)+'\n')
+-    g.write('OPTL    = '+self.setCompilers.getLinkerFlags()+'\n')
++    g.write('OPTL    = '+self.getLinkerFlags()+'\n')
+     g.write('INCS = $(INCPAR)\n')
+     g.write('LIBS = $(LIBPAR)\n')
+     if self.argDB['with-mumps-serial']:
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/PARTY.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/PARTY.py
+index 3736a717ed..d3374bcc2a 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/PARTY.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/PARTY.py
+@@ -15,9 +15,9 @@ class Configure(config.package.Package):
+     import os
+ 
+     g = open(os.path.join(self.packageDir,'make.inc'),'w')
+-    self.setCompilers.pushLanguage('C')
+-    g.write('CC = '+self.setCompilers.getCompiler()+' '+self.updatePackageCFlags(self.setCompilers.getCompilerFlags())+'\n')
+-    self.setCompilers.popLanguage()
++    self.pushLanguage('C')
++    g.write('CC = '+self.getCompiler()+' '+self.updatePackageCFlags(self.getCompilerFlags())+'\n')
++    self.popLanguage()
+     g.close()
+ 
+     if self.installNeeded('make.inc'):
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/PTScotch.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/PTScotch.py
+index 3039e2260a..c6adacca75 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/PTScotch.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/PTScotch.py
+@@ -49,13 +49,13 @@ class Configure(config.package.Package):
+     g.write('AR	        = '+self.setCompilers.AR+'\n')
+     g.write('ARFLAGS	= '+self.setCompilers.AR_FLAGS+'\n')
+     g.write('CAT	= cat\n')
+-    self.setCompilers.pushLanguage('C')
+-    g.write('CCS        = '+self.setCompilers.getCompiler()+'\n')
+-    g.write('CCP        = '+self.setCompilers.getCompiler()+'\n')
+-    g.write('CCD        = '+self.setCompilers.getCompiler()+'\n')
++    self.pushLanguage('C')
++    g.write('CCS        = '+self.getCompiler()+'\n')
++    g.write('CCP        = '+self.getCompiler()+'\n')
++    g.write('CCD        = '+self.getCompiler()+'\n')
+ 
+     # Building cflags/ldflags
+-    self.cflags = self.updatePackageCFlags(self.setCompilers.getCompilerFlags())+' '+self.headers.toString(self.mpi.include)
++    self.cflags = self.updatePackageCFlags(self.getCompilerFlags())+' '+self.headers.toString(self.mpi.include)
+     functions = self.framework.require('config.functions', self)
+     if not functions.haveFunction('FORK') and not functions.haveFunction('_PIPE'):
+       raise RuntimeError('Error building PTScotch: no pipe function')
+@@ -95,7 +95,7 @@ class Configure(config.package.Package):
+     g.write('YACC	= '+self.programs.bison+' -y\n')
+     g.close()
+ 
+-    self.setCompilers.popLanguage()
++    self.popLanguage()
+ 
+     if self.installNeeded(os.path.join('src','Makefile.inc')):
+       try:
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/PaStiX.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/PaStiX.py
+index 6592863079..4d9251ee48 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/PaStiX.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/PaStiX.py
+@@ -53,18 +53,18 @@ class Configure(config.package.Package):
+     g.write('EXEEXT      = \n')
+     g.write('OBJEXT      = .o\n')
+     g.write('LIBEXT      = .'+self.setCompilers.AR_LIB_SUFFIX+'\n')
+-    self.setCompilers.pushLanguage('C')
+-    g.write('CCPROG      = '+self.setCompilers.getCompiler()+'\n')
++    self.pushLanguage('C')
++    g.write('CCPROG      = '+self.getCompiler()+'\n')
+     # common.c tries to use some silly clock_gettime() routine that Mac doesn't have unless this is set
+     if self.setCompilers.isDarwin(self.log):
+       cflags = ' -DX_ARCHi686_mac    '
+     else:
+       cflags = ''
+     if self.mpi.found:
+-      g.write('CCFOPT      = '+self.updatePackageCFlags(self.setCompilers.getCompilerFlags())+' '+self.headers.toString(self.mpi.include)+' '+cflags+'\n')
++      g.write('CCFOPT      = '+self.updatePackageCFlags(self.getCompilerFlags())+' '+self.headers.toString(self.mpi.include)+' '+cflags+'\n')
+     else:
+-      g.write('CCFOPT      = '+self.updatePackageCFlags(self.setCompilers.getCompilerFlags())+' '+cflags+'\n')
+-    self.setCompilers.popLanguage()
++      g.write('CCFOPT      = '+self.updatePackageCFlags(self.getCompilerFlags())+' '+cflags+'\n')
++    self.popLanguage()
+     g.write('CFPROG      = \n')
+     g.write('CF90PROG    = \n')
+     g.write('MCFPROG     = \n')
+@@ -74,9 +74,9 @@ class Configure(config.package.Package):
+     g.write('MKPROG      = '+self.make.make+'\n')
+     # PaStiX make system has error where in one location it doesn't pass in CCFOTP
+     if self.setCompilers.isDarwin(self.log):
+-      g.write('MPCCPROG    = '+self.setCompilers.getCompiler()+' -DX_ARCHi686_mac \n')
++      g.write('MPCCPROG    = '+self.getCompiler()+' -DX_ARCHi686_mac \n')
+     else:
+-      g.write('MPCCPROG    = '+self.setCompilers.getCompiler()+'\n')
++      g.write('MPCCPROG    = '+self.getCompiler()+'\n')
+     g.write('ARFLAGS     = '+self.setCompilers.AR_FLAGS+'\n')
+     g.write('ARPROG      = '+self.setCompilers.AR+'\n')
+     extralib = ''
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/SuiteSparse.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/SuiteSparse.py
+index b17b79e64d..3de634af59 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/SuiteSparse.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/SuiteSparse.py
+@@ -52,22 +52,22 @@ class Configure(config.package.Package):
+     # From v4.5.0, SuiteSparse_config/SuiteSparse_config.mk is not modifiable anymore. Instead, we must override make variables
+     args=[]
+ 
+-    self.setCompilers.pushLanguage('C')
+-    args.append('CC="'+self.setCompilers.getCompiler()+'"')
+-    cflags=self.updatePackageCFlags(self.setCompilers.getCompilerFlags())
++    self.pushLanguage('C')
++    args.append('CC="'+self.getCompiler()+'"')
++    cflags=self.updatePackageCFlags(self.getCompilerFlags())
+     if self.checkSharedLibrariesEnabled():
+-      ldflags=self.setCompilers.getDynamicLinkerFlags()
++      ldflags=self.getDynamicLinkerFlags()
+     else:
+       ldflags=''
+     ldflags+=self.setCompilers.LDFLAGS
+     # SuiteSparse 5.6.0 makefile has a bug in how it treats LDFLAGS (not using the override directive)
+     ldflags+=" -L\$(INSTALL_LIB)"
+-    self.setCompilers.popLanguage()
++    self.popLanguage()
+ 
+     # CHOLMOD may build the shared library with CXX
+-    self.setCompilers.pushLanguage('Cxx')
+-    args.append('CXX="'+self.setCompilers.getCompiler()+'"')
+-    self.setCompilers.popLanguage()
++    self.pushLanguage('Cxx')
++    args.append('CXX="'+self.getCompiler()+'"')
++    self.popLanguage()
+ 
+     args.append('MAKE="'+self.make.make+'"')
+     args.append('RANLIB="'+self.setCompilers.RANLIB+'"')
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/Triangle.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/Triangle.py
+index 6bed69f936..d7934cf27d 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/Triangle.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/Triangle.py
+@@ -37,7 +37,7 @@ class Configure(config.package.Package):
+     g.write('MKDIR            = '+self.programs.mkdir+'\n')
+     g.write('OMAKE            = '+self.make.make+' '+self.make.noprintdirflag+'\n')
+ 
+-    g.write('CLINKER          = '+self.setCompilers.getLinker()+'\n')
++    g.write('CLINKER          = '+self.getLinker()+'\n')
+     g.write('AR               = '+self.setCompilers.AR+'\n')
+     g.write('ARFLAGS          = '+self.setCompilers.AR_FLAGS+'\n')
+     g.write('AR_LIB_SUFFIX    = '+self.setCompilers.AR_LIB_SUFFIX+'\n')
+@@ -51,14 +51,14 @@ class Configure(config.package.Package):
+     g.write('TRIANGLELIB      = libtriangle.$(AR_LIB_SUFFIX)\n')
+     g.write('SHLIB            = libtriangle\n')
+ 
+-    self.setCompilers.pushLanguage('C')
+-    cflags = self.updatePackageCFlags(self.setCompilers.getCompilerFlags())
++    self.pushLanguage('C')
++    cflags = self.updatePackageCFlags(self.getCompilerFlags())
+     cflags += ' '+self.headers.toString('.')
+     cflags += ' -fPIC'
+ 
+-    g.write('CC             = '+self.setCompilers.getCompiler()+'\n')
++    g.write('CC             = '+self.getCompiler()+'\n')
+     g.write('CFLAGS         = '+cflags+'\n')
+-    self.setCompilers.popLanguage()
++    self.popLanguage()
+ 
+     if self.checkSharedLibrariesEnabled():
+       import config.setCompilers
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/ascem-io.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/ascem-io.py
+index eeaebf91da..f2e575a1ea 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/ascem-io.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/ascem-io.py
+@@ -25,12 +25,12 @@ class Configure(config.package.Package):
+ 
+   def Install(self):
+     import os
+-    self.setCompilers.pushLanguage('C')
++    self.pushLanguage('C')
+     if self.hdf5.include:
+-      MAKEARGS = 'MACHINE="" CC="'+self.setCompilers.getCompiler()+' '+self.updatePackageCFlags(self.setCompilers.getCompilerFlags())+'" HDF5_INCLUDE_DIR="'+self.hdf5.include[0]+'"'
++      MAKEARGS = 'MACHINE="" CC="'+self.getCompiler()+' '+self.updatePackageCFlags(self.getCompilerFlags())+'" HDF5_INCLUDE_DIR="'+self.hdf5.include[0]+'"'
+     else:
+-      MAKEARGS = 'MACHINE="" CC="'+self.setCompilers.getCompiler()+' '+self.updatePackageCFlags(self.setCompilers.getCompilerFlags())+'"'
+-    self.setCompilers.popLanguage()
++      MAKEARGS = 'MACHINE="" CC="'+self.getCompiler()+' '+self.updatePackageCFlags(self.getCompilerFlags())+'"'
++    self.popLanguage()
+     INSTALLARGS = 'ASCEMIO_INSTALL_DIR="'+self.installDir+'"'
+     g = open(os.path.join(self.packageDir,'compiledata'),'w')
+     g.write(MAKEARGS+INSTALLARGS)
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/blis.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/blis.py
+index 0eabc16869..8eeb85f273 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/blis.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/blis.py
+@@ -40,7 +40,7 @@ class Configure(config.package.Package):
+   def Install(self):
+     import os
+     with self.Language('C'):
+-      cc = self.setCompilers.getCompiler()
++      cc = self.getCompiler()
+     try:
+       self.logPrintBox('Configuring BLIS; this may take several minutes')
+       args = ['./configure', '--prefix='+self.installDir]
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/ctetgen.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/ctetgen.py
+index 37a7dfb1f5..d79364edb1 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/ctetgen.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/ctetgen.py
+@@ -52,9 +52,9 @@ class Configure(config.package.GNUPackage):
+       self.logPrintBox('Compiling Ctetgen; this may take several minutes')
+       # uses the regular PETSc library builder and then moves result
+       # turn off any compiler optimizations as they may break CTETGEN
+-      self.setCompilers.pushLanguage('C')
+-      cflags = self.checkNoOptFlag()+' '+self.getSharedFlag(self.setCompilers.getCompilerFlags())+' '+self.getPointerSizeFlag(self.setCompilers.getCompilerFlags())+' '+self.getWindowsNonOptFlags(self.setCompilers.getCompilerFlags())+' '+self.getDebugFlags(self.setCompilers.getCompilerFlags())
+-      self.setCompilers.popLanguage()
++      self.pushLanguage('C')
++      cflags = self.checkNoOptFlag()+' '+self.getSharedFlag(self.getCompilerFlags())+' '+self.getPointerSizeFlag(self.getCompilerFlags())+' '+self.getWindowsNonOptFlags(self.getCompilerFlags())+' '+self.getDebugFlags(self.getCompilerFlags())
++      self.popLanguage()
+       output,err,ret  = config.package.GNUPackage.executeShellCommand(self.make.make+' PETSC_DIR='+self.petscdir.dir+' clean lib PCC_FLAGS="'+cflags+'"',timeout=1000, log = self.log, cwd=self.packageDir)
+       self.log.write(output+err)
+       self.logPrintBox('Installing Ctetgen; this may take several minutes')
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/egads.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/egads.py
+index 5abb193c9e..88b44ca0c1 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/egads.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/egads.py
+@@ -117,9 +117,9 @@ clean:
+       self.logPrintBox('Compiling egads; this may take several minutes')
+       # uses the regular PETSc library builder and then moves result
+       # turn off any compiler optimizations as they may break egads
+-      self.setCompilers.pushLanguage('C')
+-      cflags = self.checkNoOptFlag()+' '+self.getSharedFlag(self.setCompilers.getCompilerFlags())+' '+self.getPointerSizeFlag(self.setCompilers.getCompilerFlags())+' '+self.getWindowsNonOptFlags(self.setCompilers.getCompilerFlags())+' '+self.getDebugFlags(self.setCompilers.getCompilerFlags())
+-      self.setCompilers.popLanguage()
++      self.pushLanguage('C')
++      cflags = self.checkNoOptFlag()+' '+self.getSharedFlag(self.getCompilerFlags())+' '+self.getPointerSizeFlag(self.getCompilerFlags())+' '+self.getWindowsNonOptFlags(self.getCompilerFlags())+' '+self.getDebugFlags(self.getCompilerFlags())
++      self.popLanguage()
+       output,err,ret  = config.package.GNUPackage.executeShellCommand(self.make.make+' -f make.inc PETSC_DIR=' + self.petscdir.dir + ' clean lib PCC_FLAGS="' + cflags + '"', timeout=1000, log = self.log, cwd=self.packageDir)
+       self.log.write(output+err)
+       self.logPrintBox('Installing egads; this may take several minutes')
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/exodusii.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/exodusii.py
+index 7d510eb28a..8d15a144b6 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/exodusii.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/exodusii.py
+@@ -30,18 +30,18 @@ class Configure(config.package.CMakePackage):
+     args.append('-DACCESSDIR:PATH='+self.installDir)
+     args.append('-DCMAKE_INSTALL_PREFIX:PATH='+self.installDir)
+     args.append('-DCMAKE_INSTALL_RPATH:PATH='+os.path.join(self.installDir,'lib'))
+-    self.setCompilers.pushLanguage('C')
+-    args.append('-DCMAKE_C_COMPILER:FILEPATH="'+self.setCompilers.getCompiler()+'"')
+-    self.setCompilers.popLanguage()
++    self.pushLanguage('C')
++    args.append('-DCMAKE_C_COMPILER:FILEPATH="'+self.getCompiler()+'"')
++    self.popLanguage()
+     # building the fortran library is technically not required to add exodus support
+     # we build it anyway so that fortran users can still use exodus functions directly 
+     # from their code
+     if hasattr(self.setCompilers, 'FC'):
+-      self.setCompilers.pushLanguage('FC')
+-      args.append('-DCMAKE_Fortran_COMPILER:FILEPATH="'+self.setCompilers.getCompiler()+'"')
++      self.pushLanguage('FC')
++      args.append('-DCMAKE_Fortran_COMPILER:FILEPATH="'+self.getCompiler()+'"')
+       args.append('-DSEACASProj_ENABLE_SEACASExodus_for=ON')
+       args.append('-DSEACASProj_ENABLE_SEACASExoIIv2for32=ON')
+-      self.setCompilers.popLanguage()
++      self.popLanguage()
+     else:
+       args.append('-DSEACASProj_ENABLE_SEACASExodus_for=OFF')
+       args.append('-DSEACASProj_ENABLE_SEACASExoIIv2for32=OFF')
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/f2cblaslapack.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/f2cblaslapack.py
+index 7bb938f48d..d474fdf897 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/f2cblaslapack.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/f2cblaslapack.py
+@@ -39,14 +39,14 @@ class Configure(config.package.Package):
+             cc = self.compilers.CC
+             line = 'CC = '+cc+'\n'
+           if line.startswith('COPTFLAGS '):
+-            self.setCompilers.pushLanguage('C')
+-            line = 'COPTFLAGS  = '+self.updatePackageCFlags(self.setCompilers.getCompilerFlags())+'\n'
+-            self.setCompilers.popLanguage()
++            self.pushLanguage('C')
++            line = 'COPTFLAGS  = '+self.updatePackageCFlags(self.getCompilerFlags())+'\n'
++            self.popLanguage()
+           if line.startswith('CNOOPT'):
+-            self.setCompilers.pushLanguage('C')
++            self.pushLanguage('C')
+             noopt = self.checkNoOptFlag()
+-            line = 'CNOOPT = '+noopt+ ' '+self.getSharedFlag(self.setCompilers.getCompilerFlags())+' '+self.getPointerSizeFlag(self.setCompilers.getCompilerFlags())+' '+self.getWindowsNonOptFlags(self.setCompilers.getCompilerFlags())+'\n'
+-            self.setCompilers.popLanguage()
++            line = 'CNOOPT = '+noopt+ ' '+self.getSharedFlag(self.getCompilerFlags())+' '+self.getPointerSizeFlag(self.getCompilerFlags())+' '+self.getWindowsNonOptFlags(self.getCompilerFlags())+'\n'
++            self.popLanguage()
+           if line.startswith('AR  '):
+             line = 'AR      = '+self.setCompilers.AR+'\n'
+           if line.startswith('AR_FLAGS  '):
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/fblaslapack.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/fblaslapack.py
+index c1ae2e2e9a..368f69cd4f 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/fblaslapack.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/fblaslapack.py
+@@ -38,14 +38,14 @@ class Configure(config.package.Package):
+         cc = self.compilers.CC
+         line = 'CC = '+cc+'\n'
+       if line.startswith('COPTFLAGS '):
+-        self.setCompilers.pushLanguage('C')
+-        line = 'COPTFLAGS  = '+self.setCompilers.getCompilerFlags()
++        self.pushLanguage('C')
++        line = 'COPTFLAGS  = '+self.getCompilerFlags()
+         noopt = self.checkNoOptFlag()
+-        self.setCompilers.popLanguage()
++        self.popLanguage()
+       if line.startswith('CNOOPT'):
+-        self.setCompilers.pushLanguage('C')
+-        line = 'CNOOPT = '+noopt+ ' '+self.getSharedFlag(self.setCompilers.getCompilerFlags())+' '+self.getPointerSizeFlag(self.setCompilers.getCompilerFlags())+' '+self.getWindowsNonOptFlags(self.setCompilers.getCompilerFlags())
+-        self.setCompilers.popLanguage()
++        self.pushLanguage('C')
++        line = 'CNOOPT = '+noopt+ ' '+self.getSharedFlag(self.getCompilerFlags())+' '+self.getPointerSizeFlag(self.getCompilerFlags())+' '+self.getWindowsNonOptFlags(self.getCompilerFlags())
++        self.popLanguage()
+       if line.startswith('FC  '):
+         fc = self.compilers.FC
+         if fc.find('f90') >= 0 or fc.find('f95') >=0:
+@@ -54,14 +54,14 @@ class Configure(config.package.Package):
+             self.log.write('Using IBM f90 compiler, switching to xlf for compiling BLAS/LAPACK\n')
+         line = 'FC = '+fc+'\n'
+       if line.startswith('FOPTFLAGS '):
+-        self.setCompilers.pushLanguage('FC')
+-        line = 'FOPTFLAGS  = '+self.updatePackageFFlags(self.setCompilers.getCompilerFlags())+'\n'
++        self.pushLanguage('FC')
++        line = 'FOPTFLAGS  = '+self.updatePackageFFlags(self.getCompilerFlags())+'\n'
+         noopt = self.checkNoOptFlag()
+-        self.setCompilers.popLanguage()
++        self.popLanguage()
+       if line.startswith('FNOOPT'):
+-        self.setCompilers.pushLanguage('FC')
+-        line = 'FNOOPT = '+noopt+' '+self.getSharedFlag(self.setCompilers.getCompilerFlags())+' '+self.getPointerSizeFlag(self.setCompilers.getCompilerFlags())+' '+self.getWindowsNonOptFlags(self.setCompilers.getCompilerFlags())+' '+self.updatePackageFFlags('')+'\n'
+-        self.setCompilers.popLanguage()
++        self.pushLanguage('FC')
++        line = 'FNOOPT = '+noopt+' '+self.getSharedFlag(self.getCompilerFlags())+' '+self.getPointerSizeFlag(self.getCompilerFlags())+' '+self.getWindowsNonOptFlags(self.getCompilerFlags())+' '+self.updatePackageFFlags('')+'\n'
++        self.popLanguage()
+       if line.startswith('AR  '):
+         line = 'AR      = '+self.setCompilers.AR+'\n'
+       if line.startswith('AR_FLAGS  '):
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/hara.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/hara.py
+index e6d45ee065..8b22bd8bda 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/hara.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/hara.py
+@@ -42,11 +42,11 @@ class Configure(config.package.Package):
+     if self.openmp.found:
+       self.usesopenmp = 'yes'
+ 
+-    self.setCompilers.pushLanguage('Cxx')
+-    cxx = self.setCompilers.getCompiler()
+-    cxxflags = self.setCompilers.getCompilerFlags()
++    self.pushLanguage('Cxx')
++    cxx = self.getCompiler()
++    cxxflags = self.getCompilerFlags()
+     cxxflags = cxxflags.replace('-fvisibility=hidden','')
+-    self.setCompilers.popLanguage()
++    self.popLanguage()
+ 
+     with_gpu=False
+     if self.cuda.found and self.magma.found and self.kblas.found:
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/hpddm.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/hpddm.py
+index 954c92376e..cc2df32fe8 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/hpddm.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/hpddm.py
+@@ -38,10 +38,10 @@ class Configure(config.package.Package):
+     if self.slepc.found and not self.checkSharedLibrariesEnabled():
+       raise RuntimeError('Shared libraries enabled needed to build PCHPDDM')
+     buildDir = os.path.join(self.packageDir,'petsc-build')
+-    self.setCompilers.pushLanguage('Cxx')
+-    cxx = self.setCompilers.getCompiler()
+-    cxxflags = self.setCompilers.getCompilerFlags()
+-    self.setCompilers.popLanguage()
++    self.pushLanguage('Cxx')
++    cxx = self.getCompiler()
++    cxxflags = self.getCompilerFlags()
++    self.popLanguage()
+     if self.framework.argDB['prefix'] and not 'package-prefix-hash' in self.argDB:
+       PETSC_DIR  = os.path.abspath(os.path.expanduser(self.argDB['prefix']))
+       PETSC_ARCH = ''
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/kblas.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/kblas.py
+index f13f464107..921b10bc57 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/kblas.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/kblas.py
+@@ -34,10 +34,10 @@ class Configure(config.package.Package):
+     if self.openmp.found:
+       self.usesopenmp = 'yes'
+ 
+-    self.setCompilers.pushLanguage('Cxx')
+-    cxx = self.setCompilers.getCompiler()
+-    cxxflags = self.setCompilers.getCompilerFlags()
+-    self.setCompilers.popLanguage()
++    self.pushLanguage('Cxx')
++    cxx = self.getCompiler()
++    cxxflags = self.getCompilerFlags()
++    self.popLanguage()
+ 
+     self.pushLanguage('CUDA')
+     nvcc = self.getCompiler()
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/libceed.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/libceed.py
+index 81d1e3b633..ab4b8bb861 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/libceed.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/libceed.py
+@@ -26,7 +26,7 @@ class Configure(config.package.Package):
+     import os
+     # TODO: maybe add support for various backends, CUDA, libXSMM, OCCA, MAGMA?
+     with self.Language('C'):
+-      cc = self.setCompilers.getCompiler()
++      cc = self.getCompiler()
+     try:
+       self.logPrintBox('Compiling libceed; this may take several minutes')
+       output,err,ret  = config.package.Package.executeShellCommand(self.make.make_jnp_list + ['CC='+cc, 'prefix='+self.installDir, '-B'], cwd=self.packageDir, timeout=250, log=self.log)
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/magma.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/magma.py
+index 61bfbf8594..564f46a1ca 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/magma.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/magma.py
+@@ -86,24 +86,24 @@ class Configure(config.package.Package):
+     if fcbindings and not hasattr(self.compilers, 'FC'):
+       raise RuntimeError('Missing Fortran compiler for MAGMA Fortran bindings')
+ 
+-    self.setCompilers.pushLanguage('C')
+-    cc = self.setCompilers.getCompiler()
+-    cflags = self.setCompilers.getCompilerFlags()
+-    self.setCompilers.popLanguage()
+-
+-    self.setCompilers.pushLanguage('Cxx')
+-    cxx = self.setCompilers.getCompiler()
+-    cxxflags = self.setCompilers.getCompilerFlags()
++    self.pushLanguage('C')
++    cc = self.getCompiler()
++    cflags = self.getCompilerFlags()
++    self.popLanguage()
++
++    self.pushLanguage('Cxx')
++    cxx = self.getCompiler()
++    cxxflags = self.getCompilerFlags()
+     cxxflags = cxxflags.replace('-fvisibility=hidden','')
+-    self.setCompilers.popLanguage()
++    self.popLanguage()
+ 
+     fc = ''
+     fcflags = ''
+     if fcbindings:
+-      self.setCompilers.pushLanguage('FC')
+-      fc = self.setCompilers.getCompiler()
+-      fcflags = self.setCompilers.getCompilerFlags()
+-      self.setCompilers.popLanguage()
++      self.pushLanguage('FC')
++      fc = self.getCompiler()
++      fcflags = self.getCompilerFlags()
++      self.popLanguage()
+ 
+     self.pushLanguage('CUDA')
+     nvcc = self.getCompiler()
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/mstk.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/mstk.py
+index 27691bdfa6..176685b79d 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/mstk.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/mstk.py
+@@ -70,7 +70,7 @@ class Configure(config.package.CMakePackage):
+ 
+     #  Need to pass -DMETIS_5 to C and C++ compiler flags otherwise assumes older Metis
+     args = self.rmArgsStartsWith(args,['-DCMAKE_CXX_FLAGS:STRING','-DCMAKE_C_FLAGS:STRING'])
+-    args.append('-DCMAKE_C_FLAGS:STRING="'+self.updatePackageCFlags(self.setCompilers.getCompilerFlags())+' -DMETIS_5"')
++    args.append('-DCMAKE_C_FLAGS:STRING="'+self.updatePackageCFlags(self.getCompilerFlags())+' -DMETIS_5"')
+     if hasattr(self.compilers, 'CXX'):
+       self.pushLanguage('Cxx')
+       args.append('-DCMAKE_CXX_FLAGS:STRING="'+self.updatePackageCxxFlags(self.getCompilerFlags())+' -DMETIS_5"')
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/pARMS.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/pARMS.py
+index 1246b49ff0..fc3b42e078 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/pARMS.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/pARMS.py
+@@ -31,14 +31,14 @@ class Configure(config.package.Package):
+     g.write('.SUFFIXES: .c .o .f .F\n')
+ 
+     # C compiler
+-    self.setCompilers.pushLanguage('C')
+-    g.write('CC         = '+self.setCompilers.getCompiler()+'\n')
+-    g.write('CFLAGS     = '+self.updatePackageCFlags(self.setCompilers.getCompilerFlags())+' -DUSE_MPI -DREAL=double -DHAS_BLAS ')
++    self.pushLanguage('C')
++    g.write('CC         = '+self.getCompiler()+'\n')
++    g.write('CFLAGS     = '+self.updatePackageCFlags(self.getCompilerFlags())+' -DUSE_MPI -DREAL=double -DHAS_BLAS ')
+     if self.scalartypes.scalartype == 'complex':
+       g.write('-DDBL_CMPLX\n')
+     else:
+       g.write('-DDBL\n')
+-    self.setCompilers.popLanguage()
++    self.popLanguage()
+ 
+     # BLAS mangling
+     if self.blasLapack.mangling == 'underscore':
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/scalapack.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/scalapack.py
+index 01ea4eb8ed..7464222432 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/scalapack.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/scalapack.py
+@@ -43,21 +43,21 @@ class Configure(config.package.Package):
+     else:
+       fdef = '-DNoChange'
+     g.write('CDEFS        = '+fdef+'\n')
+-    self.setCompilers.pushLanguage('FC')
+-    g.write('FC           = '+self.setCompilers.getCompiler()+'\n')
+-    g.write('FCFLAGS      = '+self.updatePackageFFlags(self.setCompilers.getCompilerFlags())+'\n')
+-    g.write('FCLOADER     = '+self.setCompilers.getLinker()+'\n')
+-    g.write('FCLOADFLAGS  = '+self.setCompilers.getLinkerFlags()+'\n')
+-    self.setCompilers.popLanguage()
+-    self.setCompilers.pushLanguage('C')
+-    g.write('CC           = '+self.setCompilers.getCompiler()+'\n')
+-    g.write('CCFLAGS      = '+self.updatePackageCFlags(self.setCompilers.getCompilerFlags())+' $(MPIINC)\n')
++    self.pushLanguage('FC')
++    g.write('FC           = '+self.getCompiler()+'\n')
++    g.write('FCFLAGS      = '+self.updatePackageFFlags(self.getCompilerFlags())+'\n')
++    g.write('FCLOADER     = '+self.getLinker()+'\n')
++    g.write('FCLOADFLAGS  = '+self.getLinkerFlags()+'\n')
++    self.popLanguage()
++    self.pushLanguage('C')
++    g.write('CC           = '+self.getCompiler()+'\n')
++    g.write('CCFLAGS      = '+self.updatePackageCFlags(self.getCompilerFlags())+' $(MPIINC)\n')
+     noopt = self.checkNoOptFlag()
+-    g.write('CFLAGS       = '+noopt+ ' '+self.getSharedFlag(self.setCompilers.getCompilerFlags())+' '+self.getPointerSizeFlag(self.setCompilers.getCompilerFlags())+' '+self.getWindowsNonOptFlags(self.setCompilers.getCompilerFlags())+'\n')
++    g.write('CFLAGS       = '+noopt+ ' '+self.getSharedFlag(self.getCompilerFlags())+' '+self.getPointerSizeFlag(self.getCompilerFlags())+' '+self.getWindowsNonOptFlags(self.getCompilerFlags())+'\n')
+ 
+-    g.write('CCLOADER     = '+self.setCompilers.getLinker()+'\n')
+-    g.write('CCLOADFLAGS  = '+self.setCompilers.getLinkerFlags()+'\n')
+-    self.setCompilers.popLanguage()
++    g.write('CCLOADER     = '+self.getLinker()+'\n')
++    g.write('CCLOADFLAGS  = '+self.getLinkerFlags()+'\n')
++    self.popLanguage()
+     g.write('ARCH         = '+self.setCompilers.AR+'\n')
+     g.write('ARCHFLAGS    = '+self.setCompilers.AR_FLAGS+'\n')
+     g.write('RANLIB       = '+self.setCompilers.RANLIB+'\n')
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/sprng.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/sprng.py
+index 96c02f1103..712ac4d006 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/sprng.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/sprng.py
+@@ -25,17 +25,17 @@ class Configure(config.package.Package):
+     g.write('AR_LIB_SUFFIX  = '+self.setCompilers.AR_LIB_SUFFIX+'\n')
+     g.write('RANLIB         = '+self.setCompilers.RANLIB+'\n')
+ 
+-    self.setCompilers.pushLanguage('C')
+-    cflags = self.updatePackageCFlags(self.setCompilers.getCompilerFlags())
++    self.pushLanguage('C')
++    cflags = self.updatePackageCFlags(self.getCompilerFlags())
+     cflags += ' ' + self.headers.toString(self.mpi.include)+' '+self.headers.toString('.')
+     cflags += ' ' + '-DSPRNG_MPI' # either using MPI or MPIUNI
+ 
+-    g.write('CC             = '+self.setCompilers.getCompiler()+'\n')
++    g.write('CC             = '+self.getCompiler()+'\n')
+     g.write('CFLAGS         = '+cflags+'\n')
+     g.write('CLD            = $(CC)\n')
+     g.write('MPICC          = $(CC)\n')
+     g.write('CPP            ='+self.getPreprocessor()+'\n')
+-    self.setCompilers.popLanguage()
++    self.popLanguage()
+ 
+     # extra unused options
+     g.write('CLDFLAGS       = \n')
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/tetgen.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/tetgen.py
+index ef93ce7d23..f160e53f39 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/tetgen.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/tetgen.py
+@@ -30,7 +30,7 @@ class Configure(config.package.Package):
+ 
+     # This make.inc stuff is completely unnecessary for compiling TetGen. It is
+     # just here for comparing different PETSC_ARCH's
+-    self.setCompilers.pushLanguage('C++')
++    self.pushLanguage('C++')
+     g = open(makeinc,'w')
+     g.write('SHELL            = '+self.programs.SHELL+'\n')
+     g.write('CP               = '+self.programs.cp+'\n')
+@@ -38,7 +38,7 @@ class Configure(config.package.Package):
+     g.write('MKDIR            = '+self.programs.mkdir+'\n')
+     g.write('OMAKE            = '+self.make.make+' '+self.make.noprintdirflag+'\n')
+ 
+-    g.write('CLINKER          = '+self.setCompilers.getLinker()+'\n')
++    g.write('CLINKER          = '+self.getLinker()+'\n')
+     g.write('AR               = '+self.setCompilers.AR+'\n')
+     g.write('ARFLAGS          = '+self.setCompilers.AR_FLAGS+'\n')
+     g.write('AR_LIB_SUFFIX    = '+self.setCompilers.AR_LIB_SUFFIX+'\n')
+@@ -52,13 +52,13 @@ class Configure(config.package.Package):
+     g.write('TETGENLIB        = $(LIBDIR)/libtet.$(AR_LIB_SUFFIX)\n')
+     g.write('SHLIB            = libtet\n')
+ 
+-    cflags = self.updatePackageCFlags(self.setCompilers.getCompilerFlags())
++    cflags = self.updatePackageCFlags(self.getCompilerFlags())
+     cflags += ' '+self.headers.toString('.')
+     cflags += ' -fPIC'
+     cflags += ' -DTETLIBRARY'
+     predcflags = '-O0 -fPIC'    # Need to compile without optimization
+ 
+-    g.write('CC             = '+self.setCompilers.getCompiler()+'\n')
++    g.write('CC             = '+self.getCompiler()+'\n')
+     g.write('CFLAGS         = '+cflags+'\n')
+     g.write('PREDCXXFLAGS   = '+predcflags+'\n')
+     g.close()
+@@ -71,13 +71,13 @@ class Configure(config.package.Package):
+         self.installDirProvider.printSudoPasswordMessage()
+         output,err,ret = config.package.Package.executeShellCommand(self.installSudo+'mkdir -p '+os.path.join(self.installDir,'lib'), timeout=2500, log=self.log)
+         output,err,ret = config.package.Package.executeShellCommand(self.installSudo+'mkdir -p '+os.path.join(self.installDir,'include'), timeout=2500, log=self.log)
+-        output1,err1,ret1  = config.package.Package.executeShellCommand('cd '+self.packageDir+' && make CXX="'+ self.setCompilers.getCompiler() + '" CXXFLAGS="' + cflags + '" PREDCXXFLAGS="' + predcflags + '" tetlib && '+self.installSudo+'cp *.a ' + libDir + ' && rm *.a *.o', timeout=2500, log = self.log)
++        output1,err1,ret1  = config.package.Package.executeShellCommand('cd '+self.packageDir+' && make CXX="'+ self.getCompiler() + '" CXXFLAGS="' + cflags + '" PREDCXXFLAGS="' + predcflags + '" tetlib && '+self.installSudo+'cp *.a ' + libDir + ' && rm *.a *.o', timeout=2500, log = self.log)
+       except RuntimeError as e:
+         raise RuntimeError('Error running make on TetGen: '+str(e))
+       output2,err2,ret2  = config.package.Package.executeShellCommand(self.installSudo+'cp -f '+os.path.join(self.packageDir, 'tetgen.h')+' '+includeDir, timeout=60, log = self.log)
+       self.postInstall(output1+err1+output2+err2,'make.inc')
+ 
+-    self.setCompilers.popLanguage()
++    self.popLanguage()
+     return self.installDir
+ 
+   def configureLibrary(self):
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/zstd.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/zstd.py
+index b7d9dcb637..b613bbf7e0 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/zstd.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/zstd.py
+@@ -25,8 +25,8 @@ class Configure(config.package.Package):
+   def Install(self):
+     import os
+     with self.Language('C'):
+-      cc = self.setCompilers.getCompiler()
+-      cflags = self.setCompilers.getCompilerFlags()
++      cc = self.getCompiler()
++      cflags = self.getCompilerFlags()
+     try:
+       self.logPrintBox('Installing zstd; this may take several minutes')
+       output,err,ret  = config.package.Package.executeShellCommand(self.make.make_jnp_list + ['CC='+cc, 'CFLAGS='+cflags, 'PREFIX='+self.installDir, 'install'], cwd=self.packageDir, timeout=250, log=self.log)
+diff --git a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/MPI.py b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/MPI.py
+index 2e130fdcfe..f4d48f3034 100644
+--- a/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/MPI.py
++++ b/petsc-6f7728a9761c25b7b2c7be97feaf14de71316cbd/config/BuildSystem/config/packages/MPI.py
+@@ -241,35 +241,74 @@ shared libraries and run with --known-mpi-shared-libraries=1')
+     self.addMakeMacro('MPIEXEC', self.mpiexec)
+     self.mpiexec = self.mpiexec + ' -n 1'
+ 
+-    # check that hostname works
+-    self.getExecutable('ping', resultName = 'ping')
+-    if not hasattr(self,'ping'):
+-      self.getExecutable('fping', resultName = 'ping')
+-    if hasattr(self,'ping'):
+-      self.getExecutable('hostname', resultName = 'hostname')
+-      if hasattr(self,'hostname'):
++    if hasattr(self,'mpich_numversion') or hasattr(self,'ompi_major_version'):
++
++      hostnameworks = 0
++      # turn of checks if Apple firewall is on since it prevents success of the tests even though MPI will work
++      self.getExecutable('socketfilterfw', path = ['/usr/libexec/ApplicationFirewall'])
++      if hasattr(self,'socketfilterfw'):
++        try:
++          (result, err, ret) = Configure.executeShellCommand(self.socketfilterfw + ' --getglobalstate', timeout = 10, log = self.log, threads = 1)
++          if result.find("Firewall is enabled") > -1:  hostnameworks = 1
++        except:
++          self.logPrint("Exception: Unable to get result from socketfilterfw\n")
++
++
++      self.getExecutable('hostname')
++      if not hostnameworks and hasattr(self,'hostname'):
+         try:
+           (hostname, err, ret) = Configure.executeShellCommand(self.hostname, timeout = 10, log = self.log, threads = 1)
+           self.logPrint("Return code from hostname: %s\n" % ret)
+         except:
+-          self.logPrint("Exception: Unable to get result from hostname, skipping ping check\n")
++          self.logPrint("Exception: Unable to get result from hostname, skipping network checks\n")
+         else:
+           if ret == 0:
+-            self.logPrint("Testing ping on %s\n" % self.hostname)
+-            if self.setCompilers.isCygwin(self.log):
+-              count = ' -n 2 '
+-            else:
+-              count = ' -c 2 '
+-            errormessage = 'Your hostname will not work with MPI, perhaps you have VPN running whose network settings may not play well with MPI or your network is misconfigured\n'
+-            try:
+-              (ok, err, ret) = Configure.executeShellCommand(self.ping + count + hostname, timeout = 10, log = self.log, threads = 1)
+-              self.logPrint("Return code from ping: %s\n" % ret)
+-              if ret != 0:
+-                raise RuntimeError(errormessage+" Return code %s\n" % ret)
+-            except:
+-              raise RuntimeError("Exception: "+errormessage)
++            self.logPrint("Hostname works, running network checks")
++
++            self.getExecutable('ping', path = ['/sbin'], useDefaultPath = 1)
++            if not hasattr(self,'ping'):
++              self.getExecutable('fping', resultName = 'ping')
++            if hasattr(self,'ping'):
++              if self.setCompilers.isCygwin(self.log):
++                count = ' -n 2 '
++              else:
++                count = ' -c 2 '
++              try:
++                (ok, err, ret) = Configure.executeShellCommand(self.ping + count + hostname, timeout = 10, log = self.log, threads = 1)
++                self.logPrint("Return code from ping: %s\n" % ret)
++                if not ret: hostnameworks = 1
++              except:
++                self.logPrint("Exception: while running ping skipping ping check\n")
++
++              if not hostnameworks:
++                # Note: host may not work on MacOS, this is normal
++                self.getExecutable('host')
++                if hasattr(self,'host'):
++                  try:
++                    (ok, err, ret) = Configure.executeShellCommand(self.host + ' '+ hostname, timeout = 10, log = self.log, threads = 1)
++                    self.logPrint("Return code from host: %s\n" % ret)
++                    # host works even with broken VPN is is not a useful test
++                  except:
++                    self.logPrint("Exception: while running host skipping host check\n")
++
++              if not hostnameworks:
++                self.getExecutable('traceroute', path = ['/usr/sbin'], useDefaultPath = 1)
++                if hasattr(self,'traceroute'):
++                  try:
++                    (ok, err, ret) = Configure.executeShellCommand(self.traceroute + ' ' + hostname, timeout = 10, log = self.log, threads = 1)
++                    self.logPrint("Return code from traceroute: %s\n" % ret)
++                    if not ret: hostnameworks = 1
++                  except:
++                    self.logPrint("Exception: while running traceroute skipping traceroute check\n")
++
++              if not hostnameworks:
++                self.logPrintBox('***** WARNING: mpiexec may not work on your system due to network issues.\n\
++Perhaps you have VPN running whose network settings may not work with mpiexec or your network is misconfigured')
+           else:
+-            self.logPrint("Unable to get result from hostname, skipping ping check\n")
++            elf.logPrintBox('***** WARNING: mpiexec may not work on your system due to network issues.\n\
++Unable to run hostname to check the network')
++          self.logPrintDivider()
++
+ 
+     # check that mpiexec runs an MPI program correctly
+     error_message = 'Unable to run MPI program with '+self.mpiexec+'\n\
